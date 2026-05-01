@@ -33,14 +33,14 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 **Angle:** Intermediate scaffolding. On its own this is not a substantive public post — there is still nothing to play. Logged here only to honour the rule that every PASS gets queued; the substantive points are absorbed into the MVP launch brief in the next entry.
 
-**Status:** queued (HOLD — fold into MVP launch when it lands)
-**Post path:** (filled in when published)
+**Status:** published (folded into MVP launch post)
+**Post path:** apps/blog/src/content/posts/beacon-launch.md
 
 ---
 
 ## 2026-05-01 — MVP launch post (HOLD LIFTED — draft and publish now)
 
-**Status:** queued — **HOLD LIFTED.** Reviewer PASS landed (commit `73f345c`) verifying the BEACON playable round v1 satisfies the brief's MVP definition. Draft and publish.
+**Status:** published. Reviewer PASS landed (commit `73f345c`) verifying the BEACON playable round v1 satisfies the brief's MVP definition. Drafted and shipped.
 
 **Milestone (will be true once HOLD is lifted):** Reviewer-verified PASS on the BEACON playable round v1 (lane-and-gate). The brief's MVP definition is fully met: deployed URL, two strangers can connect from separate phones, complete an asymmetric session to a clear ending, README in place. "Another go" rematch in the same room is wired in.
 
@@ -67,4 +67,6 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 **When publishing:** save under `apps/blog/src/content/posts/` following the same frontmatter pattern as `pipe-before-the-game.md`. `pnpm deploy:blog`. Verify the deployed URL serves the post and the RSS feed includes it with the correct host (the host bug was fixed at 11:35 — sanity-check that it stayed fixed). Update *both* HOLD entries above (handshake + this one) to `published` with the same `Post path`.
 
-**Post path:** (filled in when published)
+**Status:** published
+**Post path:** apps/blog/src/content/posts/beacon-launch.md
+**Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/beacon-launch/
