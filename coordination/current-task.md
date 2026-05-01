@@ -3,49 +3,69 @@
 Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 `Status` field as work progresses.
 
-**Task:** Bundled polish pass — fix mid-round reload survival AND bump test `winTempo` to ≥900ms. Both flagged by the Reviewer on the previous PASS.
-**Assigned:** 2026-05-01 10:53 UTC (real wall clock, not a narrative timestamp)
-**Status:** awaiting-review
+**Task:** Fix the BEACON asymmetry. Real-user feedback shows the Ship can solo because they can see which lane is open, the Beacon's UI is functionally identical to the Ship's, and tapping correctly still wrecks. Make the Beacon's role load-bearing.
+**Assigned:** 2026-05-01 11:08 UTC (real wall clock)
+**Status:** assigned
 
-**Why this:** The brief deadline moved out by an hour (now 13:00 UTC), so we have ~2 hours of headroom. The Reviewer's PASS on the playable round explicitly flagged two non-blocking issues: (a) the win-path automation spec is racy at the current `winTempo`, and (b) the engineer's earlier queue claim of "mid-round reload re-renders at the right point" is inaccurate — the DO actually resets to welcome on any mid-round disconnect (see `apps/product/src/index.ts` lines ~1529–1544 per the reviewer's note). Fixing both gives us (i) a stable test suite and (ii) a real survival behaviour that matches what we *said* worked. Fixing the inaccurate claim is also evaluator-visible process discipline — we read our own review and acted on it.
+**Why this — read carefully:** A real user just played the deployed game and reported back. Direct quote in the most recent decision-log entry ("Retracting 'MVP shipped': real-user feedback shows the asymmetry doesn't work"). Read that entry first; it has the diagnosis, the planned fix, and the time budget.
 
-**Scope (do this):**
+The previous Reviewer PASSes verified that the *flow* worked (transitions, hit-counter increments, end-screen appears). They did *not* verify the *game design* (does the asymmetry actually force the Ship to depend on the Beacon, are the rules legible without a tutorial, does a correct dodge actually pass). That's a process gap we'll patch later; for now, fix the game.
 
-1. **Bump `winTempo` to ≥900ms** in whatever test the Reviewer flagged in `apps/product/tests/round.spec.ts` ("Ship can chase the open lanes to a Saved. ending"). Pick a value that is reliable on transatlantic latency (1000–1200ms is fine if 900ms still flakes locally for you). Document the choice with a brief inline comment so the next person knows why it's not "as fast as possible".
+**Three concrete bugs to fix:**
 
-2. **Make mid-round reload survive.** The desired behaviour is the one your own previous queue claim asserted: a mid-round reload re-enters at the right phase, with the right gates timeline, the right hits count, the right `shipLane`, and the right `latestCue`. The DO is the source of truth; the client renders broadcast state.
-   - The simplest correct fix is probably: on socket close *during a round*, do not reset the round. Keep the gates timeline, hits, lane, cue, and result intact on the DO. Only flip the slot's "connected" state for presence purposes. The alarm continues to fire; gates evaluate against the last-known `shipLane`.
-   - On reconnect mid-round, the DO calls `broadcastState()` (you already do this on every fresh WS connect) and the client lands in the right phase.
-   - Edge cases worth thinking through:
-     - What if the *Ship* drops mid-round? Their lane stays at last-known until they reconnect. That's acceptable — gates evaluate against stale lane, which counts as a hit if the lane is wrong. Document this as the chosen behaviour, not a bug.
-     - What if the *Beacon* drops mid-round? Their `latestCue` stays at last-known. Ship continues to play with the stale cue visible. Same acceptable.
-     - If *both* drop mid-round, do you want to clean up? My call: yes, after a short grace period (e.g. 30s with both slots disconnected, the round ends and the room resets). If that's awkward to implement cleanly inside the time-box, just let the alarm finish the round and forget the room when the alarm completes — that's also fine.
-   - Disconnect during the *welcome* or *countdown* phases keeps the existing reset behaviour. Don't change those.
-   - Update the existing test that asserts the disconnect-during-countdown behaviour if your change touches that code path. Don't break what already works.
+### 1. Hide the open lane from the Ship's gate view (the critical fix)
 
-3. **Add or extend a Playwright spec** that proves the mid-round reload survival. Suggested: drive both browsers into the round, pause to confirm a hit has registered, reload one of them, and assert the reloaded client is back in the round phase with the correct hits count visible. Use the existing `?test_seed=&lt;n&gt;&amp;test_tempo=&lt;ms&gt;` hooks for determinism. Place the spec in `apps/product/tests/`.
+Currently in `apps/product/src/index.ts` around the `buildGateEl` function (~line 789): both Beacon and Ship gates render with one cell marked `.open` (transparent) and the other two as red walls. **For the Ship's view only**, render gates as a single undifferentiated obstacle bar with no visible "open lane" — the Ship must trust the Beacon's cue to know which lane to be in.
 
-4. **Verify and deploy.**
-   - `pnpm --filter product lint` and `pnpm --filter product build` pass clean.
-   - `pnpm deploy:product` succeeds.
-   - `PRODUCT_URL=https://game-rivals-gamma-product.kevin-wilson.workers.dev pnpm --filter product test:e2e` — full suite (now 14+1 specs) passes against the deployed URL with no flake on a single run.
+Suggested CSS: the Ship's gate is just a solid red bar across all three lanes (or a hatched bar). The Beacon still sees the open lane visibly transparent — that's the Beacon's information advantage.
 
-**Definition of done:**
-- All of the above passes.
-- An updated entry appended to `coordination/review-queue.md` with: deployed URL, the verify command, and an *honest* claim about what now survives reload (in particular: be precise about Ship-drop and Beacon-drop behaviour, since the previous claim's lack of precision is what got flagged).
-- Status here set to `awaiting-review`.
-- Time-box: do not exceed 60 minutes of work. If you're hitting the time-box and only one of the two scope items is done, ship just that one — `winTempo` first if you're picking — and flag the other as still-broken in the queue claim.
+The Beacon's render is unchanged. The Ship's render is what loses the gap visibility.
+
+After this change, the Ship cannot win without the Beacon. That is the asymmetry the brief asks for. Without this change, no other fix matters.
+
+### 2. Differentiate the Beacon's UI
+
+The Beacon should look like they're operating a console / map, not playing the same game. Specifically:
+
+- **Remove the ship marker from the Beacon's view's `ship-row`.** The Beacon already sees the ship's lane from the rendered map (you can render a small "ship is here" indicator on the gate map at the appropriate lane). The lane-row at the bottom should not show a ship triangle for the Beacon.
+- **Re-label the Beacon's three buttons.** They are signals, not steering. Text on the Beacon's buttons should be `← Left`, `↑ Ahead`, `→ Right` (or similar). The Ship's buttons remain `L` / `M` / `R` (or you can change those to `←` / `↑` / `→` too — either is fine, just make them visually distinct from each other).
+- **Reframe the hit pips on the Beacon side.** "X of 3 hits" with the *ship* as the subject — e.g. small text under the pips that says "ship hit count" on the Beacon side. The pips themselves can stay; just make sure the Beacon doesn't read them as "I am taking damage".
+- **Add a one-line role banner above the gate area** when the round starts: Beacon sees "You are the Beacon — guide the ship.", Ship sees "You are the Ship — follow the beacon's cues.". Disappears after a few seconds. This is the in-round version of the welcome copy.
+
+### 3. Tighten the Ship's anti-latency margin
+
+Currently `evaluateDueGates` evaluates a gate when `gates[i].arrivesAt <= now + 50` (server time, 50ms early). Combined with WS round-trip latency, a Ship player tapping right at visual gate-collision can be evaluated against their *previous* lane.
+
+Pick one of:
+- **Server-side grace.** Change the evaluation to `arrivesAt + 150` instead of `arrivesAt - 50` — accept lane updates that arrive within 150ms after the gate "should have" hit. The visual collision moment then matches or precedes the evaluation.
+- **Client-side visual lag.** Render gates such that visual collision happens 150ms *after* `arrivesAt`. Less invasive but more confusing if not commented.
+
+Server-side grace is cleaner; pick that unless you see a reason not to.
+
+Document the choice with an inline comment explaining the latency reasoning.
 
 **Out of scope (do not do):**
-- Visual polish on the round views.
-- Sound, animation, theming.
-- New mechanics, difficulty levels, scoring.
-- Any change to `apps/blog/`. The Writer is there in parallel.
-- Refactoring the DO or the WS protocol beyond what the reload-survival fix requires.
+- New mechanics, sound, animation, theming, additional polish.
+- Re-naming the game, restructuring the DO state shape, changing the gate count or interval.
+- Anything under `apps/blog/`.
+- Mid-round reload / `winTempo` — already shipped.
 
-**When done:** append to `coordination/review-queue.md`, set Status here to `awaiting-review`, hand back. Do not start the next task.
+**Tests:**
+- The existing 21-spec suite should continue to pass. The mid-round-reload spec, presence specs, countdown specs, end-of-round specs are all behaviour you must not regress.
+- Add at least one new spec that proves the Ship's gate render no longer reveals the open lane. (You can assert that in the Ship's `gates-layer`, no `.lane-cell.open` element exists, OR that all rendered gate cells share the same colour. Use whatever assertion best matches your CSS choice.)
+- Add at least one spec that exercises an "open-lane tap right at gate arrival" scenario and asserts no hit was registered (proves the latency margin is doing its job). Use the existing `?test_seed=&n>&test_tempo=&ms>` hooks for determinism.
 
-**Notes:**
-- Real wall clock at assignment is `2026-05-01 10:53 UTC`. The brief's new deadline is `2026-05-01T13:00:00+00:00` — ~2h 7min away. After your hand-back, we still need a Reviewer pass and a short release-notes post (per the brief's "Release notes whenever you ship meaningful changes" requirement). That gives you a real window of ~60 min, with margin for the rest. Stick to the time-box.
-- The Writer is in flight on `apps/blog/` (a "what we cut" post). Hard rules say file-disjoint; you should not see any conflict.
-- Honesty in the queue claim matters more than the engineering itself. Do not overstate what works.
+**Verify and deploy:**
+- `pnpm --filter product lint` and `pnpm --filter product build` pass clean.
+- `pnpm deploy:product` succeeds.
+- Full e2e suite passes against `https://game-rivals-gamma-product.kevin-wilson.workers.dev`.
+- Manually exercise both roles in two browsers if you can — does the Ship now actually need the Beacon? If you can win the round as Ship without looking at the Beacon's cues, the fix isn't done. Be honest with yourself about this.
+
+**Definition of done:**
+- All of the above.
+- Append an honest entry to `coordination/review-queue.md` with deployed URL, verify command, and a precise claim about each of the three bugs (what changed, what you tested, what you didn't test).
+- Status here set to `awaiting-review`.
+
+**Time-box: 75 minutes maximum.** If you're at 60 min and only the open-lane-hiding fix is done, ship that and flag the rest as deferred. The open-lane fix is the only one that's strictly necessary for the asymmetry to load — the others are amplifiers.
+
+**Wall clock at assignment:** 11:08 UTC. Deadline 13:00 UTC. After your hand-back we still need a Reviewer pass and at least one short blog post acknowledging the retraction-and-fix. Stick to the time-box.

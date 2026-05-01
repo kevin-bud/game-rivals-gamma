@@ -16,6 +16,33 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 11:08 — Retracting "MVP shipped": real-user feedback shows the asymmetry doesn't work
+
+**Context:** External user feedback just landed. Direct quote: *"the game doesn't seem to work. The ship version runs slow enough that it's easy to pick the gaps without needing the beacon. This is assuming that you're trying to avoid the red parts? Doing that still results in a wreck though. Does the person acting as the beacon also need to avoid the same obstacles? If so, that doesn't make sense from the game's narrative. I think the concept needs some work."*
+
+Reading the source confirms three real bugs, not one:
+
+1. **The Ship sees which lane is open.** Gates render as three lane cells; the open lane gets a `.open` class with `background: transparent; border-color: transparent;`. The Ship's view at 1.7s/gate × 2 visible = ~3.4s of lead time on each gate, with the open lane visibly identifiable. The Ship can solo. The Beacon's cues are decorative, not load-bearing. This breaks the brief's "asymmetric end-to-end" requirement.
+2. **The Beacon's UI is functionally identical to the Ship's.** Same hit pips, same L/M/R lane buttons, same ship marker on the map. The Beacon's buttons send `{type: "cue"}` instead of `{type: "lane"}`, but visually a Beacon player has no idea their role is different — hence the user's question "does the Beacon also need to avoid the same obstacles?". Answer should be obviously *no*; current UI makes it ambiguous.
+3. **"Wrecks even when dodging correctly"** is most likely a combination of (a) the open-lane convention being non-obvious (transparent vs red is unusual — green-vs-red would be), and (b) network latency: hit evaluation runs at `arrivesAt - 50ms` server-side, so a tap that visually looks "in time" can be evaluated against the previous lane.
+
+**Choice:** Retract "MVP shipped" in this log. The brief's MVP definition includes *"The two players experience asymmetric roles end-to-end"* — they don't, because one of the two roles (Beacon) is functionally redundant. Whatever the Reviewer's Playwright specs verified, they verified the *flow* (transitions through phases) rather than the *gameplay loop* (does the asymmetry actually force cooperation). That's a process gap I should have caught — Playwright assertions on state transitions are not a substitute for someone playing the game.
+
+**The fix has three parts:**
+1. **Hide the open lane from the Ship's gate view.** Ship sees an undifferentiated obstacle approaching — they must rely on the Beacon's cue to choose a lane. This is the critical fix; without it, the asymmetry stays decorative.
+2. **Visually differentiate the Beacon's UI** so it looks like a *map view*, not a *playing view*. Remove the ship marker from the lane row in the Beacon view (or render it as "Ship is here" with a clearly observational label), and re-label the Beacon's buttons as **directional signals** (e.g. "← Left", "↑ Ahead", "→ Right") rather than lane labels. Frame the hit count as "the ship has taken X of 3 hits", not "you have X of 3 hits".
+3. **Tighten the Ship's anti-latency margin.** Either widen the server's evaluation window (e.g. accept lane changes up to 200ms after `arrivesAt`) or make the visual collision moment lag the server evaluation by ~150ms so a "looks in time" tap actually IS in time. Pick whichever is simpler.
+
+**Out of scope for the fix:** any new mechanic, sound, animation. Hold the line on shape; only repair the brokenness.
+
+**Time budget:** real wall clock at retraction is ~11:08 UTC. Deadline 13:00 UTC. ~1h 52min remaining. Engineer time-box 75 min for this (more than the previous polish pass — there's actual design work in differentiating the two views). Reviewer 15 min. That leaves ~22 min margin to ship a "we got it wrong, here's what we fixed" post or a release-notes post.
+
+**Reversible?** The retraction is purely a process correction in this log. The technical fix is reversible if the new shape proves worse than what's shipped.
+
+**Process learning to carry forward:** A Playwright spec that asserts "the round-view appears" is not the same as "the game is playable". Future Reviewer dispatches should include "play the game like a real user with no priors and tell me whether the rules are guessable" as an explicit probe, not just "run the e2e suite".
+
+---
+
 ## 2026-05-01 10:52 — Brief deadline moved out by an hour; re-plan
 
 **Context:** Teammate prompted me to re-read the brief. The deadline line in `BRIEF.md` now reads `2026-05-01T13:00:00+00:00` (was `2026-05-01T12:00:00.000Z`). Real wall clock per `date -u`: `2026-05-01 10:51:55 UTC`. We now have ~2 hours 8 minutes of headroom, not the ~70 minutes I planned around.
