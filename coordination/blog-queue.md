@@ -22,5 +22,5 @@ commits it to `apps/blog/src/content/posts/`, then marks the entry done.
 
 Make it short and honest. This is not a launch post — the game does not exist yet. It is a process post about ordering risk. Title suggestion: "We shipped the pipe before the game" (Writer can change this). British English. Link to the URL but make clear there is no game to play yet — only an empty room.
 
-**Status:** queued
-**Post path:** (filled in when published)
+**Status:** published
+**Post path:** apps/blog/src/content/posts/pipe-before-the-game.md
