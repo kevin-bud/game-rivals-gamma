@@ -1,5 +1,8 @@
-// Minimal real-time room: create / join by short code, presence over WS.
-// Game mechanic deliberately deferred — this proves the pipe only.
+// BEACON — co-op asymmetric room. The Beacon (slot A) sees the sea and
+// flashes signals; the Ship (slot B) sails blind through fog. This file
+// wires the *handshake into a game*: role-named welcome, ready-up,
+// synced 3-2-1 countdown, and a placeholder round screen. The mechanic
+// itself is the next slice.
 
 export type Env = {
   ROOM: DurableObjectNamespace;
@@ -8,6 +11,11 @@ export type Env = {
 // Unambiguous alphabet — no 0/O, 1/I/L.
 const ROOM_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const ROOM_CODE_LENGTH = 5;
+
+// Buffer between "both ready" and t=0 of the countdown. Long enough for
+// a slow socket to deliver the message and the client to render "3" before
+// it ticks to "2".
+const COUNTDOWN_BUFFER_MS = 3500;
 
 const generateRoomCode = (): string => {
   const bytes = new Uint8Array(ROOM_CODE_LENGTH);
@@ -35,7 +43,7 @@ const landingPage = (): string => `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>two-phone room</title>
+    <title>BEACON — two-phone co-op</title>
     <style>
       :root { color-scheme: light dark; }
       * { box-sizing: border-box; }
@@ -51,8 +59,8 @@ const landingPage = (): string => `<!doctype html>
         max-width: 28rem;
         margin: 0 auto;
       }
-      h1 { font-size: 1.4rem; margin: 0.5rem 0 0; }
-      p.lede { margin: 0; opacity: 0.8; line-height: 1.4; }
+      h1 { font-size: 1.6rem; margin: 0.5rem 0 0; letter-spacing: 0.05em; }
+      p.lede { margin: 0; opacity: 0.85; line-height: 1.5; }
       form { display: flex; flex-direction: column; gap: 0.75rem; margin: 0; }
       label { font-weight: 600; font-size: 0.95rem; }
       input[type=text] {
@@ -85,14 +93,13 @@ const landingPage = (): string => `<!doctype html>
         flex-direction: column;
         gap: 0.75rem;
       }
-      hr { border: 0; border-top: 1px solid #8884; margin: 0.25rem 0; }
     </style>
   </head>
   <body>
-    <h1>Two-phone room</h1>
-    <p class="lede">Create a room, share the code with one other phone, and watch the connection light up.</p>
+    <h1>BEACON</h1>
+    <p class="lede">A co-op game for two phones. One of you sees the sea; the other sails through fog. Reach harbour together.</p>
     <form class="card" method="POST" action="/create" data-testid="create-form">
-      <label>Start a new room</label>
+      <label>Start a new round</label>
       <button type="submit" data-testid="create-button">Create session</button>
     </form>
     <form class="card" method="POST" action="/join" data-testid="join-form">
@@ -129,7 +136,7 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>room ${code}</title>
+    <title>BEACON — room ${code}</title>
     <style>
       :root { color-scheme: light dark; }
       * { box-sizing: border-box; }
@@ -142,7 +149,7 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         padding: 1.5rem;
         display: flex;
         flex-direction: column;
-        gap: 1.25rem;
+        gap: 1rem;
       }
       .card {
         border: 1px solid #8884;
@@ -150,73 +157,293 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         padding: 1.1rem;
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
-      }
-      .label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; }
-      .code {
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-        font-size: 2.4rem;
-        letter-spacing: 0.25em;
-        font-weight: 700;
-      }
-      .role {
-        font-size: 1.4rem;
-        font-weight: 700;
-      }
-      .presence {
-        font-size: 1.1rem;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
         gap: 0.6rem;
       }
-      .dot { width: 0.9rem; height: 0.9rem; border-radius: 50%; background: #aaa; flex-shrink: 0; }
-      .dot.connected { background: #2cb84a; }
-      .dot.waiting { background: #e0a82e; }
-      .dot.disconnected { background: #cc3333; }
-      .dot.closed { background: #888; }
-      button {
-        font-size: 1rem;
-        padding: 0.75rem;
+      .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.7; }
+      .code-row { display: flex; align-items: center; gap: 0.75rem; justify-content: space-between; }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 1.6rem;
+        letter-spacing: 0.2em;
+        font-weight: 700;
+      }
+      .copy-btn {
+        font-size: 0.85rem;
+        padding: 0.5rem 0.85rem;
         border-radius: 0.5rem;
         border: 1px solid #888;
         background: transparent;
         color: inherit;
         cursor: pointer;
         font-weight: 600;
-        min-height: 2.6rem;
+        min-height: 2.4rem;
+        flex-shrink: 0;
       }
+      .role-card h2 {
+        margin: 0;
+        font-size: 1.5rem;
+        line-height: 1.25;
+      }
+      .role-card p {
+        margin: 0;
+        line-height: 1.5;
+      }
+      .ready-btn {
+        font-size: 1.15rem;
+        padding: 1rem;
+        border-radius: 0.6rem;
+        border: 0;
+        background: #2266ee;
+        color: white;
+        font-weight: 700;
+        cursor: pointer;
+        min-height: 3.2rem;
+      }
+      .ready-btn[disabled] {
+        background: #555;
+        cursor: default;
+        opacity: 0.85;
+      }
+      .presence {
+        font-size: 1rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .dot { width: 0.8rem; height: 0.8rem; border-radius: 50%; background: #aaa; flex-shrink: 0; }
+      .dot.connected { background: #2cb84a; }
+      .dot.waiting { background: #e0a82e; }
+      .dot.disconnected { background: #cc3333; }
+      .dot.closed { background: #888; }
+      .leave { font-size: 0.95rem; }
       a { color: inherit; }
+
+      /* Countdown overlay */
+      .countdown-screen {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.5rem;
+        z-index: 10;
+      }
+      .countdown-screen .num {
+        font-size: 9rem;
+        font-weight: 800;
+        line-height: 1;
+        font-variant-numeric: tabular-nums;
+      }
+      .countdown-screen .who {
+        font-size: 1.4rem;
+        font-weight: 600;
+        opacity: 0.85;
+      }
+
+      /* Round screen (placeholder) */
+      .round-screen {
+        position: fixed;
+        inset: 0;
+        background: #0b1626;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        gap: 1.25rem;
+        z-index: 10;
+        text-align: center;
+      }
+      .round-screen h2 {
+        margin: 0;
+        font-size: 1.8rem;
+        font-weight: 700;
+      }
+      .round-screen .room-tag {
+        font-size: 0.85rem;
+        opacity: 0.65;
+        letter-spacing: 0.15em;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .round-screen a { color: #9bd0ff; }
+
+      .hidden { display: none !important; }
     </style>
   </head>
   <body>
-    <div class="card">
-      <div class="label">Room code</div>
-      <div class="code" data-testid="room-code">${code}</div>
-      <button type="button" data-testid="copy-button" onclick="copyCode()">Copy code</button>
-    </div>
-    <div class="card">
-      <div class="label">You are</div>
-      <div class="role" data-testid="role">Player ${role}</div>
-    </div>
-    <div class="card">
-      <div class="label">Other player</div>
-      <div class="presence">
-        <span class="dot waiting" data-testid="presence-dot" id="dot"></span>
-        <span data-testid="presence-text" id="presence">connecting…</span>
+    <div id="welcome-view">
+      <div class="card">
+        <div class="label">Room code</div>
+        <div class="code-row">
+          <div class="code" data-testid="room-code">${code}</div>
+          <button type="button" class="copy-btn" data-testid="copy-button" onclick="copyCode()">Copy</button>
+        </div>
       </div>
+
+      <div class="card role-card" data-testid="role-card">
+        <div class="label" data-testid="role">${role === "A" ? "You are the Beacon" : "You are the Ship"}</div>
+        <h2 data-testid="role-title">${role === "A" ? "You are the Beacon." : "You are the Ship."}</h2>
+        <p data-testid="role-body">${
+          role === "A"
+            ? "You see the sea. The Ship sails blind. Flash signals to guide them past the rocks and home to harbour."
+            : "You sail through fog. The Beacon sees the rocks for you. Watch their signals and steer to harbour."
+        }</p>
+        <button type="button" class="ready-btn" id="ready-btn" data-testid="ready-button" onclick="sendReady()">I'm ready</button>
+      </div>
+
+      <div class="card">
+        <div class="label">${role === "A" ? "The Ship" : "The Beacon"}</div>
+        <div class="presence">
+          <span class="dot waiting" data-testid="presence-dot" id="dot"></span>
+          <span data-testid="presence-text" id="presence">connecting…</span>
+        </div>
+      </div>
+
+      <p class="leave"><a href="/" data-testid="leave-link">Leave room</a></p>
     </div>
-    <p><a href="/">Leave room</a></p>
+
+    <div id="countdown-view" class="countdown-screen hidden" data-testid="countdown-view">
+      <div class="who" data-testid="countdown-label">Get ready, ${role === "A" ? "Beacon" : "Ship"}</div>
+      <div class="num" data-testid="countdown-number">3</div>
+    </div>
+
+    <div id="round-view" class="round-screen hidden" data-testid="round-view">
+      <h2 data-testid="round-title">${role === "A" ? "Beacon view — coming next." : "Ship view — coming next."}</h2>
+      <div class="room-tag">Room <span data-testid="round-room-code">${code}</span></div>
+      <p><a href="/" data-testid="round-leave-link">Leave</a></p>
+    </div>
+
     <script>
       const code = ${JSON.stringify(code)};
       const role = ${JSON.stringify(role)};
+      const otherRole = role === "A" ? "B" : "A";
+      const selfName = role === "A" ? "Beacon" : "Ship";
+      const otherName = role === "A" ? "Ship" : "Beacon";
+
+      const welcomeView = document.getElementById("welcome-view");
+      const countdownView = document.getElementById("countdown-view");
+      const countdownNumberEl = countdownView.querySelector("[data-testid='countdown-number']");
+      const roundView = document.getElementById("round-view");
       const presenceEl = document.getElementById("presence");
       const dotEl = document.getElementById("dot");
+      const readyBtn = document.getElementById("ready-btn");
+
+      let ws;
+      let backoff = 500;
+      let countdownRafId = null;
+      let countdownStartsAt = null;
+      // Mirror of the latest server state, used to render the welcome card.
+      let lastState = null;
+
+      const showOnly = (which) => {
+        welcomeView.classList.toggle("hidden", which !== "welcome");
+        countdownView.classList.toggle("hidden", which !== "countdown");
+        roundView.classList.toggle("hidden", which !== "round");
+      };
 
       const setPresence = (state, text) => {
         dotEl.className = "dot " + state;
         presenceEl.textContent = text;
       };
+
+      const renderWelcome = () => {
+        if (!lastState) {
+          setPresence("waiting", "connecting…");
+          return;
+        }
+        const other = lastState[otherRole.toLowerCase()];
+        const selfState = lastState[role.toLowerCase()];
+
+        // Other-side presence text.
+        if (!other.connected) {
+          setPresence("waiting", "Waiting for the " + otherName + " to join…");
+        } else if (other.ready) {
+          setPresence("connected", "The " + otherName + " is ready.");
+        } else {
+          setPresence("connected", "Waiting for the " + otherName + " to be ready.");
+        }
+
+        // Ready button state.
+        if (selfState.ready) {
+          readyBtn.disabled = true;
+          readyBtn.textContent = "Waiting…";
+          readyBtn.setAttribute("data-ready", "true");
+        } else {
+          readyBtn.disabled = false;
+          readyBtn.textContent = "I'm ready";
+          readyBtn.setAttribute("data-ready", "false");
+        }
+      };
+
+      const cancelCountdown = () => {
+        if (countdownRafId !== null) {
+          cancelAnimationFrame(countdownRafId);
+          countdownRafId = null;
+        }
+        countdownStartsAt = null;
+      };
+
+      const tickCountdown = () => {
+        if (countdownStartsAt === null) {
+          return;
+        }
+        const remainingMs = countdownStartsAt - Date.now();
+        if (remainingMs <= 0) {
+          countdownNumberEl.textContent = "0";
+          // Round transition is driven by the server's "round" state, not by
+          // a client-side timeout — so just hold on 0 until the server
+          // broadcasts the phase change.
+          countdownRafId = requestAnimationFrame(tickCountdown);
+          return;
+        }
+        // 3500ms remaining → "3", 2500..1500 → "2", etc.
+        const seconds = Math.ceil(remainingMs / 1000);
+        const display = String(Math.min(seconds, 3));
+        if (countdownNumberEl.textContent !== display) {
+          countdownNumberEl.textContent = display;
+        }
+        countdownRafId = requestAnimationFrame(tickCountdown);
+      };
+
+      const startCountdown = (startsAt) => {
+        cancelCountdown();
+        countdownStartsAt = startsAt;
+        countdownNumberEl.textContent = "3";
+        showOnly("countdown");
+        countdownRafId = requestAnimationFrame(tickCountdown);
+      };
+
+      const handleStateMessage = (msg) => {
+        lastState = { a: msg.a, b: msg.b };
+        if (msg.phase === "welcome") {
+          cancelCountdown();
+          showOnly("welcome");
+          renderWelcome();
+        } else if (msg.phase === "countdown") {
+          renderWelcome();
+          startCountdown(msg.countdownStartsAt);
+        } else if (msg.phase === "round") {
+          cancelCountdown();
+          showOnly("round");
+        }
+      };
+
+      const sendReady = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        try {
+          ws.send(JSON.stringify({ type: "ready" }));
+        } catch (e) {
+          // ignore — close handler will retry the connection.
+        }
+      };
+      window.sendReady = sendReady;
 
       const copyCode = () => {
         if (navigator.clipboard) {
@@ -227,30 +454,29 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const url = proto + "//" + location.host + "/r/" + code + "/ws?role=" + role;
-      let ws;
-      let backoff = 500;
 
       const connect = () => {
         ws = new WebSocket(url);
         ws.addEventListener("open", () => {
           backoff = 500;
-          setPresence("waiting", "waiting…");
         });
         ws.addEventListener("message", (ev) => {
           let msg;
-          try { msg = JSON.parse(ev.data); } catch { return; }
-          if (msg.type === "presence") {
-            if (msg.otherConnected) {
-              setPresence("connected", "connected");
-            } else {
-              setPresence("waiting", "waiting…");
-            }
+          try { msg = JSON.parse(ev.data); } catch (e) { return; }
+          if (msg.type === "state") {
+            handleStateMessage(msg);
           } else if (msg.type === "rejected") {
+            cancelCountdown();
+            showOnly("welcome");
             setPresence("closed", msg.reason || "rejected");
           }
         });
         ws.addEventListener("close", () => {
-          setPresence("disconnected", "disconnected — retrying…");
+          // The server is the source of truth — fall back to "welcome" with
+          // a disconnected indicator until we reconnect and get fresh state.
+          cancelCountdown();
+          showOnly("welcome");
+          setPresence("disconnected", "Disconnected — retrying…");
           setTimeout(connect, backoff);
           backoff = Math.min(backoff * 2, 5000);
         });
@@ -263,7 +489,7 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
 `;
 
 const FULL_ROOM_MESSAGE = "Room is full — only two players per room.";
-const UNKNOWN_ROOM_MESSAGE = "That room code doesn't exist. Ask Player A to share their code again.";
+const UNKNOWN_ROOM_MESSAGE = "That room code doesn't exist. Ask the Beacon to share their code again.";
 const INVALID_CODE_MESSAGE = "Invalid room code.";
 
 const isValidCode = (code: string): boolean => {
@@ -352,16 +578,28 @@ export default {
 } satisfies ExportedHandler<Env>;
 
 type Slot = "A" | "B";
+type Phase = "welcome" | "countdown" | "round";
 
 type SocketRecord = {
   socket: WebSocket;
   slot: Slot;
 };
 
+type SlotState = {
+  connected: boolean;
+  ready: boolean;
+};
+
 export class Room implements DurableObject {
   private state: DurableObjectState;
   private sockets: Set<SocketRecord> = new Set();
   private exists = false;
+  private ready: Record<Slot, boolean> = { A: false, B: false };
+  private phase: Phase = "welcome";
+  // Server-issued unix-ms at which both clients should display "0".
+  private countdownStartsAt: number | null = null;
+  // Alarm token so a reschedule cancels in-flight transitions.
+  private roundTransitionAt: number | null = null;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -415,38 +653,136 @@ export class Room implements DurableObject {
     this.exists = true;
     server.accept();
 
+    // If a previous socket for this slot is still in our set (e.g. the page
+    // reloaded before the close event landed), drop it.
+    for (const existing of [...this.sockets]) {
+      if (existing.slot === slot) {
+        try {
+          existing.socket.close(1000, "replaced");
+        } catch {
+          // ignore
+        }
+        this.sockets.delete(existing);
+      }
+    }
+
     const record: SocketRecord = { socket: server, slot };
     this.sockets.add(record);
 
     server.addEventListener("close", () => {
-      this.sockets.delete(record);
-      this.broadcastPresence();
+      const wasPresent = this.sockets.delete(record);
+      if (!wasPresent) {
+        return;
+      }
+      this.handleSlotDisconnect(slot);
     });
     server.addEventListener("error", () => {
-      this.sockets.delete(record);
-      this.broadcastPresence();
+      const wasPresent = this.sockets.delete(record);
+      if (!wasPresent) {
+        return;
+      }
+      this.handleSlotDisconnect(slot);
     });
     server.addEventListener("message", (ev) => {
-      // No game messages yet — echo back as a relay so the pipe is testable.
       let parsed: unknown;
       try {
         parsed = JSON.parse(typeof ev.data === "string" ? ev.data : "");
       } catch {
         return;
       }
-      if (parsed && typeof parsed === "object" && (parsed as { type?: string }).type === "ping") {
+      if (!parsed || typeof parsed !== "object") {
+        return;
+      }
+      const type = (parsed as { type?: string }).type;
+      if (type === "ping") {
         try {
           server.send(JSON.stringify({ type: "pong" }));
         } catch {
           // ignore
         }
+        return;
+      }
+      if (type === "ready") {
+        this.handleReady(slot);
+        return;
       }
     });
 
-    // Send initial presence to the new socket and notify the peer.
-    this.broadcastPresence();
+    // Send initial state to the new socket and notify the peer.
+    this.broadcastState();
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  async alarm(): Promise<void> {
+    // The countdown alarm fires once countdownStartsAt is reached. Promote
+    // the room to the round phase if we're still in countdown.
+    const now = Date.now();
+    if (
+      this.phase === "countdown" &&
+      this.roundTransitionAt !== null &&
+      now + 50 >= this.roundTransitionAt
+    ) {
+      this.phase = "round";
+      this.countdownStartsAt = null;
+      this.roundTransitionAt = null;
+      this.broadcastState();
+    }
+  }
+
+  private handleReady(slot: Slot): void {
+    if (this.phase !== "welcome") {
+      // Ignore late ready presses once the countdown or round has begun.
+      return;
+    }
+    if (this.ready[slot]) {
+      return;
+    }
+    this.ready[slot] = true;
+    if (this.ready.A && this.ready.B && this.bothConnected()) {
+      this.phase = "countdown";
+      this.countdownStartsAt = Date.now() + COUNTDOWN_BUFFER_MS;
+      this.roundTransitionAt = this.countdownStartsAt;
+      // Schedule a transition to "round" at countdownStartsAt. Use a DO alarm
+      // so the transition fires even if no message arrives meanwhile.
+      this.state.storage.setAlarm(this.countdownStartsAt).catch(() => {
+        // ignore — broadcast still happens.
+      });
+    }
+    this.broadcastState();
+  }
+
+  private handleSlotDisconnect(slot: Slot): void {
+    // Any disconnect resets that slot's ready flag, cancels any in-flight
+    // countdown, and returns the room to welcome. The other side re-renders
+    // immediately based on the broadcast.
+    this.ready[slot] = false;
+    if (this.phase === "countdown") {
+      this.phase = "welcome";
+      this.countdownStartsAt = null;
+      this.roundTransitionAt = null;
+      this.state.storage.deleteAlarm().catch(() => {
+        // ignore
+      });
+      // If the other side had also pressed ready, keep their flag — no, the
+      // task spec says reset on disconnect during countdown so both go back
+      // to welcome cleanly. Reset both.
+      this.ready.A = false;
+      this.ready.B = false;
+    }
+    if (this.phase === "round") {
+      // If the round was in flight and a side drops, fall back to welcome so
+      // the remaining player can re-handshake when their partner returns.
+      this.phase = "welcome";
+      this.ready.A = false;
+      this.ready.B = false;
+      this.countdownStartsAt = null;
+    }
+    this.broadcastState();
+  }
+
+  private bothConnected(): boolean {
+    return this.isSlotTaken("A") && this.isSlotTaken("B");
   }
 
   private countSlotsTaken(): number {
@@ -487,19 +823,27 @@ export class Room implements DurableObject {
     return null;
   }
 
-  private broadcastPresence(): void {
-    const aConnected = this.isSlotTaken("A");
-    const bConnected = this.isSlotTaken("B");
+  private slotState(slot: Slot): SlotState {
+    return {
+      connected: this.isSlotTaken(slot),
+      ready: this.ready[slot],
+    };
+  }
+
+  private broadcastState(): void {
+    const payload: Record<string, unknown> = {
+      type: "state",
+      phase: this.phase,
+      a: this.slotState("A"),
+      b: this.slotState("B"),
+    };
+    if (this.phase === "countdown" && this.countdownStartsAt !== null) {
+      payload.countdownStartsAt = this.countdownStartsAt;
+    }
+    const serialised = JSON.stringify(payload);
     for (const rec of this.sockets) {
-      const otherConnected = rec.slot === "A" ? bConnected : aConnected;
-      const payload = JSON.stringify({
-        type: "presence",
-        self: rec.slot,
-        selfConnected: true,
-        otherConnected,
-      });
       try {
-        rec.socket.send(payload);
+        rec.socket.send(serialised);
       } catch {
         // ignore — close handler will clean up.
       }
