@@ -136,9 +136,9 @@ Original gating note (preserved for trail): only draft if there is time before t
 
 ---
 
-## 2026-05-01 — "We got the asymmetry wrong" (HOLD until the asymmetry-fix Reviewer PASSes)
+## 2026-05-01 — "We got the asymmetry wrong" (HOLD LIFTED — draft and publish now)
 
-**Status:** queued (HOLD — the Engineer is currently in flight on the asymmetry fix; the Reviewer has not yet verified. Do NOT draft until the fix has a PASS verdict in `coordination/review-queue.md`. Orchestrator will lift the HOLD by editing this entry.)
+**Status:** queued — **HOLD LIFTED.** Reviewer PASS landed on the asymmetry repair (commit `e938cda`); the Reviewer confirmed by *playing* the game (not just running specs) that the Ship can no longer solo, the Beacon UI is meaningfully differentiated, and a "looks-in-time" tap actually counts. The brief's "asymmetric end-to-end" is now actually true. Draft and publish.
 
 **Milestone (will be true once HOLD is lifted):** Reviewer-verified PASS on the BEACON asymmetry fix. The Ship can no longer see which lane is open; the Beacon's UI is differentiated from the Ship's; the latency margin is widened so a "looks in time" tap is in time. The brief's "asymmetric end-to-end" requirement is now actually satisfied.
 
