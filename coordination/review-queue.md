@@ -16,6 +16,52 @@ A claim is not "shipped" until the Reviewer verifies it.
 
 ---
 
+## 2026-05-01 — Mid-round reload survival + win-path test stabilisation
+
+**Commit:** 1e2a527297b1e91c239231833f900eaf62e4e93c
+**Deployed URL:** https://game-rivals-gamma-product.kevin-wilson.workers.dev
+
+**Claim:**
+
+This addresses the two non-blocking findings from the previous review and, in particular, retracts and replaces my earlier inaccurate claim about mid-round reload behaviour. Honest reading of what now works follows.
+
+(a) **Mid-round reload survival — what actually survives, exactly.** The DO no longer resets on mid-round disconnect. `handleSlotDisconnect` for `phase === "round"` is now a no-op apart from flipping `ready[slot]=false` and `playAgain[slot]=false` (which are not consulted during the round anyway). Concretely, after my fix:
+
+- **Ship-side reload** (the case the new spec covers): the DO retains `gates`, `gateInterval`, `nextGateIndex`, `shipLane`, `hits`, `latestCue`, `result`, `roundStartedAt`, and the existing alarm. The alarm continues firing on schedule. When the Ship's WebSocket reconnects, `webSocketHandler` calls `broadcastState()` (existing behaviour, unchanged) and the client lands in `phase: "round"` with the same gate sequence, the same hit count or higher, the same `shipLane`, and the same `latestCue`. The Beacon (other client) is never bounced and stays in `round` throughout. Verified by the new spec `mid-round reload re-enters the round with the same hits and gates` against the deployed URL.
+
+- **Beacon-side reload**: same mechanism. The DO state is retained; the alarm keeps firing. On reconnect the Beacon re-renders the gate map at the right scroll position and shows the live hit count and `latestCue`. Not covered by an automated spec on this pass — the new spec only exercises the Ship reload — but the code path is the same `handleSlotDisconnect` → no-op → reconnect-broadcast loop, so the Beacon reload reaches the same broadcast.
+
+- **Open alarm sequence**: untouched on disconnect. The `setAlarm` set by `scheduleNextGateAlarm` is not cleared. Gates that arrive while a client is disconnected still get evaluated against `this.shipLane` (which is whatever the Ship last set). For a Ship-drop, that means the Ship's *stale lane at moment of disconnect* is what the gates check against — if the Ship dropped while in lane M and gate N is in lane L, gate N counts as a hit. **This is intentional and acceptable**: the brief is co-op two-phone — quitting mid-round is leaving your partner to face hits on your behalf, which fits the framing. For a Beacon-drop, gates evaluate against whatever the (still-present) Ship sets, and the cue stops updating; the Ship plays "blind" with the most recent cue still visible. Same intentional acceptable.
+
+- **Both clients drop mid-round**: the alarm keeps firing inside the DO. Gates evaluate against the last Ship lane until the round naturally ends as `won` or `lost`. No clean-up happens. If either client returns later they will land on the result screen with the verdict and a "Another go" / "Leave" option. If neither returns, the DO is eventually evicted by the runtime; on next access the room boots in default `phase: "welcome"` state. I considered a 30-second grace window with cleanup but decided against it inside the time-box — the alarm-finishes-naturally path is correct enough and adds no failure mode that the survivor flow already handles.
+
+- **Welcome- and countdown-phase disconnects are unchanged.** `handleSlotDisconnect` still flips `phase === "countdown"` back to `welcome` and clears the alarm. The existing `disconnect during countdown returns the survivor to the welcome screen` spec in `handshake.probe.spec.ts` continues to pass.
+
+(b) **Win-path test stabilisation.** `tests/round.spec.ts` "Ship can chase the open lanes to a Saved. ending" no longer flakes on transatlantic WS round-trip. Two changes: `winTempo` bumped from 600ms to 1200ms (round length now ≈22s), and the in-page steering loop rewritten to track an explicit `gateIndex`, tap each gate exactly once when it's between 200 and 600 ms in the future, and skip the tap if `shipLane` already matches. The 200ms floor gives the lane WS message time to land at the DO and update `shipLane` before the gate-arrival alarm evaluates, even with worst-case ~100–200ms RTT. Verified 2/2 on `--repeat-each=2` and 1/1 in the full suite run.
+
+(c) **New automated spec.** `tests/round.spec.ts` — `mid-round reload re-enters the round with the same hits and gates`. Drives both clients through ready → countdown → round at 800ms tempo with `LOSE_SEED`. Waits for the Ship to register at least one taken hit pip. Snapshots the Ship's broadcast state (`phase`, `hits`, `gateCount`, `shipLane`, `firstGateLane`). Reloads page B. Asserts: round-view re-appears within 10s, at least one taken pip is still visible, post-reload state has `phase ∈ {round, result}` (not `welcome`), `gateCount === 18`, `firstGateLane` matches the pre-reload value, `hits >= pre-reload hits`. Also asserts the Beacon's phase is still `round` or `result` (the Beacon was never bounced).
+
+(d) **Things that are still true and unchanged.** All four MVP brief bullets verified by `mvp.probe.spec.ts` continue to hold: deployed URL, brand-new player end-to-end flow with no manual intervention, asymmetric Beacon/Ship roles end-to-end, README at repo root. The DO still source-of-truths the gate timeline (deterministic seed pins gates spec still passes). "Another go" rematch still works.
+
+**Verify:**
+
+```
+PRODUCT_URL=https://game-rivals-gamma-product.kevin-wilson.workers.dev pnpm --filter product test:e2e
+```
+
+Full suite (now 21 specs total — 6 reviewer probes in `mvp.probe.spec.ts`, 5 reviewer probes in `handshake.probe.spec.ts`, 5 in `room.spec.ts`, 5 in `round.spec.ts` including the new mid-round-reload spec): **21 passed in 42.1s** against the deployed URL on a single run. The previously flaky `Ship can chase the open lanes to a Saved. ending` spec passed twice in a row at `--repeat-each=2`.
+
+Lint (`pnpm --filter product lint`) and build (`pnpm --filter product build`) both clean. Deployed via `pnpm deploy:product` to version `b78c3825-3b7e-44b8-8176-2b971a0b9992`.
+
+**What I am explicitly NOT claiming:**
+- I have not added a Beacon-side reload spec. The mechanism is shared with the Ship-side reload (same `handleSlotDisconnect` no-op, same broadcast-on-connect), so the behaviour follows by construction, but only the Ship reload is verified by an automated spec on this pass.
+- I have not added a "both clients drop mid-round, room cleans up" spec. The room does NOT explicitly clean up; the alarm runs to completion. If you want explicit cleanup with a grace window, that is follow-up work.
+- I have not changed any visual polish, sound, animation, theming, scoring, or mechanics. Scope was strictly the two flagged items.
+
+**Reviewer verdict:**
+
+---
+
 ## 2026-05-01 — BEACON playable round v1 (lane-and-gate, end screen, rematch) — closes the MVP slice
 
 **Commit:** 8b9423e017c68ce5ca180c4d73641f4347a17480

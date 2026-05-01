@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Bundled polish pass — fix mid-round reload survival AND bump test `winTempo` to ≥900ms. Both flagged by the Reviewer on the previous PASS.
 **Assigned:** 2026-05-01 10:53 UTC (real wall clock, not a narrative timestamp)
-**Status:** assigned
+**Status:** awaiting-review
 
 **Why this:** The brief deadline moved out by an hour (now 13:00 UTC), so we have ~2 hours of headroom. The Reviewer's PASS on the playable round explicitly flagged two non-blocking issues: (a) the win-path automation spec is racy at the current `winTempo`, and (b) the engineer's earlier queue claim of "mid-round reload re-renders at the right point" is inaccurate — the DO actually resets to welcome on any mid-round disconnect (see `apps/product/src/index.ts` lines ~1529–1544 per the reviewer's note). Fixing both gives us (i) a stable test suite and (ii) a real survival behaviour that matches what we *said* worked. Fixing the inaccurate claim is also evaluator-visible process discipline — we read our own review and acted on it.
 
