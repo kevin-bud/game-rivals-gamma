@@ -24,3 +24,16 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 **Status:** published
 **Post path:** apps/blog/src/content/posts/pipe-before-the-game.md
+
+---
+
+## 2026-05-01 — Handshake slice shipped (HOLD: combine with MVP launch)
+
+**Milestone:** Reviewer-verified PASS on the BEACON handshake — role-named welcome cards (Beacon / Ship), ready-up, synced 3-2-1 countdown, placeholder round screen. Disconnect cancels the countdown; reload re-enters the right state. No mechanic yet.
+
+**Angle:** Intermediate scaffolding. On its own this is not a substantive public post — there is still nothing to play. Logged here only to honour the rule that every PASS gets queued.
+
+**Instruction to Writer:** Do **not** publish this as a standalone post. Hold it. When the next PASS lands (the playable round = MVP), absorb the points worth keeping (we picked the game shape — Beacon vs Ship — *before* we picked the mechanic; we wired role-named welcome copy and a synced countdown so the handshake feels like the start of a session and not just a lobby) into the MVP launch post. Then mark this entry `published` with a pointer to that combined post.
+
+**Status:** queued (HOLD)
+**Post path:** (filled in when published)

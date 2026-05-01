@@ -3,54 +3,68 @@
 Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 `Status` field as work progresses.
 
-**Task:** Wire the BEACON game framing into the existing room: role-specific welcome screens, ready-up handshake, synced 3-2-1 countdown, transition to a placeholder round screen. Plus a repo-root README that describes the game.
-**Assigned:** 2026-05-01 11:05
-**Status:** awaiting-review
+**Task:** Ship the BEACON playable round v1 — lane-and-gate mechanic. Both players play to a clear win/lose ending in a single round, with a "Another go" rematch in the same room.
+**Assigned:** 2026-05-01 11:25
+**Status:** assigned
 
-**Why this:** The room/presence pipe is verified and shipped. The next-most-risky thing is the *handoff into a game session* — both players have to know who they are, agree to start, and find themselves on the same in-round clock. Doing this slice before the playable round means we can validate the role-framing copy and the start-of-game handshake without yet committing to the mechanic implementation. The next task after this one will fill in the actual playable round.
+**Why this:** This is the slice that lands the brief's MVP definition. After this PASS, "open the URL on a phone, get into a session with a second player, play to completion, see a clear ending, all without manual intervention" is true. Both rivals are still pre-game. Speed matters more than polish — ship a complete, playable thing today.
 
-**The game (BEACON):** Co-op, ~60–90s round. Player A is the **Beacon** — sees a top-down map of fog with rocks and a harbour, can flash directional cues. Player B is the **Ship** — sees a forward-facing fog view, steers with a tiller, cannot see the map. They must reach harbour together. Full rationale in `coordination/decision-log.md` entry "Game concept: BEACON". Do not redesign the game in this task — only express it in copy and structure.
+**The mechanic (lane-and-gate):**
+- The sea has three lanes: LEFT, MIDDLE, RIGHT. Portrait. Vertical.
+- The round has a fixed sequence of **gates** generated server-side at round start. Each gate has one open lane and arrives at the ship at a specific timestamp.
+- **Beacon (Player A)** sees the *whole* gate sequence as a vertical map scrolling from top to bottom. The ship's current lane is rendered at the bottom. Beacon has three buttons — LEFT / MIDDLE / RIGHT — that *send a cue* to the Ship. Cues do not move the ship; they only render on the Ship's screen.
+- **Ship (Player B)** sees a narrow three-lane strip: the next gate or two, the ship at the bottom, and the Beacon's most recent cue rendered as a large arrow at the top of the screen (LEFT / UP / RIGHT). Ship has three buttons — LEFT / MIDDLE / RIGHT — that move the ship into that lane.
+- When a gate reaches the ship's row, the server checks: ship lane in the open lane → pass. Else → hit. **Three hits = lose.** Survive all gates = win.
+- Round length: **18 gates × ~1.7s = ~30s**. Tunable in code; pick numbers that feel right.
+
+**Architecture (must follow):**
+1. **Durable Object owns the round state.** On round start, the DO generates the gate sequence with a deterministic seed (so the same round can be re-broadcast on reload). Store `{ gates: [{lane: "L"|"M"|"R", arrivesAt: number}], shipLane: "L"|"M"|"R", hits: number, latestCue: {direction: "L"|"M"|"R", sentAt: number} | null, result: "playing"|"won"|"lost", roundStartedAt: number }`.
+2. **Hit detection on the DO.** Use one DO `alarm` per gate (or schedule them sequentially) to evaluate at each gate's `arrivesAt`. Compare against the *current* `shipLane`. Update `hits`. If `hits >= 3`, set `result: "lost"` and stop scheduling further gates. After the last gate, if still playing, set `result: "won"`.
+3. **Client messages:**
+   - Ship → DO: `{type: "lane", lane: "L"|"M"|"R"}` — updates `shipLane`. Ignored if `result !== "playing"`.
+   - Beacon → DO: `{type: "cue", direction: "L"|"M"|"R"}` — updates `latestCue` with `sentAt: Date.now()`.
+   - Either → DO: `{type: "play-again"}` — flags that player as wanting another go. When *both* have flagged, regenerate gates, reset hits, fresh `roundStartedAt`, kick off the existing 3-2-1 countdown, then start a fresh round. Show "Waiting for the Ship/Beacon to want another go" while half-pressed.
+4. **DO → both clients:** broadcast a single state shape that covers the whole round; extend the existing `state` message you already have, don't bolt on a parallel channel. Send on every state change. Clients animate locally between broadcasts using `Date.now()` against `roundStartedAt` and `gate.arrivesAt`, exactly like you did with the countdown.
+5. **Reload-into-correct-state still applies.** Mid-round reload re-renders the round at the right point, with the right hits/lane/cue/gates timeline.
+6. **Both roles see hits as they happen.** Beacon sees the ship flash red on hit; Ship sees the screen flash and the hit counter tick up.
+
+**End-of-round screen (both sides):**
+- Big result word: **"Saved."** (won) or **"Wrecked."** (lost). British English.
+- One line of subtitle reflecting the role: Beacon's says "You guided them home." / "They went down on your watch." Ship's says "You made it." / "You hit one rock too many." Keep it short, in keeping with the dry tone.
+- Primary button: **"Another go"** — sends `{type: "play-again"}`. Once tapped, the button becomes "Waiting…" and the other side sees a small line: "The Ship/Beacon wants another go."
+- Secondary link: **"Leave"** back to `/`.
 
 **Scope (do this):**
-1. **Repo-root `README.md`.** Replace whatever is there now with a short README per the brief's MVP definition: what BEACON is, who it is for, how to play (one paragraph each side: what the Beacon does, what the Ship does), how to start a session (open the URL, create, share the code). British English. Link the deployed URL: https://game-rivals-gamma-product.kevin-wilson.workers.dev. Keep it under ~150 lines.
-2. **Role-specific welcome screens on `/r/<code>`.** Replace the current "Player A / Player B" placeholder with a role-named welcome card:
-   - A → titled "You are the **Beacon**." Body explains: "You see the sea. The Ship sails blind. Flash signals to guide them past the rocks and home to harbour." Then a primary **I'm ready** button.
-   - B → titled "You are the **Ship**." Body explains: "You sail through fog. The Beacon sees the rocks for you. Watch their signals and steer to harbour." Then the same **I'm ready** button.
-   - Both sides keep the room code copyable somewhere on the page (don't lose what we already shipped).
-   - Both sides keep the live "other player: connected / waiting / disconnected" indicator (likewise).
-3. **Ready-up state on the Durable Object.** Each socket can send `{type: "ready"}`. The DO tracks ready state per slot. On each change, broadcast `{type: "ready-state", a: bool, b: bool}` to both sockets. Each side's UI shows the *other* player's status: "Waiting for the Ship to be ready" / "The Ship is ready" (and vice versa). Once a slot has sent ready, that slot's button becomes "Waiting…" and disables.
-4. **Synced 3-2-1 countdown.** When both slots are ready, the DO sends `{type: "countdown", startsAt: <unix-ms>}` with `startsAt = now + 3500` (a small buffer so both clients can render "3" before zero). Both clients render a synced countdown driven by `Date.now()` deltas — do *not* drive it off setInterval ticks on the server or off socket message timing. After 0, both clients transition to a `round` view (see step 5).
-5. **Placeholder round view.** Two role-specific placeholders:
-   - A: full-screen card "Beacon view — coming next."
-   - B: full-screen card "Ship view — coming next."
-   - Both show the room code in small text and a "Leave" link back to `/`. Do **not** start any game logic — this slice is the handshake only.
-6. **Edge cases that must work:**
-   - If a player disconnects while waiting in the welcome screen, their ready state resets to false on the DO and the other side sees the indicator flip back to "waiting".
-   - If a player disconnects *during* the countdown, cancel the countdown on both sides and return to the welcome screen with the ready state reset.
-   - If a player reloads `/r/<code>?role=A` while in any state, they should re-enter at the right state (welcome / waiting / countdown / round) — the DO is the source of truth, the client just renders what the DO broadcasts on connect.
-7. **Mobile-first portrait still applies.** Single column, large tap targets, readable at 375px wide. No new framework. Inline `<style>` is fine.
-8. **Tests.** Update `apps/product/tests/room.spec.ts` (or add a sibling spec) so it covers: both players see role-named welcome → A clicks Ready → A's button disables and B sees "the Beacon is ready" → B clicks Ready → both see countdown 3,2,1 → both land on the role-specific placeholder round view. Run against the deployed URL via `PRODUCT_URL=https://game-rivals-gamma-product.kevin-wilson.workers.dev pnpm test:e2e`.
-9. **Deploy with `pnpm deploy:product`** and confirm the deployed URL serves the new flow before claiming done.
+1. Extend the Room DO to hold the round state shape above. Generate the gate sequence with a small deterministic PRNG (don't pull in a dep; xorshift32 in 6 lines is fine) seeded from `Date.now() ^ <hash of room code>`. Bias the sequence so two consecutive gates rarely have the same opening (avoids trivial sequences).
+2. Replace both placeholder round views in `/r/<code>` with the real Beacon and Ship views described above. Single inline `<style>`, no framework, no SVG library — plain DOM (or `<canvas>` if you genuinely prefer; both are fine).
+3. Wire the client → server messages and the broadcast handling. Animate from broadcast state.
+4. Implement the end-of-round screen and the "Another go" rematch. After both players agree, run the existing 3-2-1 countdown then start a fresh round.
+5. Tests in `apps/product/tests/`:
+   - Add a spec that drives both browsers through create → join → ready → countdown → round-played-to-end → end screen visible. To make this deterministic, the simplest approach is a small test hook (e.g. honour a `?test_seed=<n>` query on `/r/<code>/ws` to force the gate seed, and/or accelerate tempo when an env var like `BEACON_TEST_MODE=1` is set on the Worker). Document any hook inline so the next person doesn't lose their mind. If you'd rather skip the hook and just assert the end screen *eventually* shows one of the two outcomes within ~45s, that's also fine — slower but simpler.
+   - Update `room.spec.ts` and the reviewer's `handshake.probe.spec.ts` so they remain passing on the new flow. Adapt; don't delete.
+6. Deploy with `pnpm deploy:product`. Verify the deployed URL serves the full flow.
 
 **Definition of done:**
-- `pnpm --filter product lint` and `pnpm --filter product build` pass clean.
+- `pnpm --filter product lint` and `pnpm --filter product build` clean.
 - `pnpm deploy:product` succeeds.
-- Two browsers / phones can complete the welcome → ready → countdown → placeholder-round flow on the deployed URL with the countdown landing on 0 within ~150ms of each other.
-- Disconnection during welcome resets the other side's "ready" indicator within ~1s.
-- Reloading the room URL during any state lands on the right state without needing the other side to do anything.
+- Two browsers / phones can complete a full session on the deployed URL: create → join → ready → countdown → round → end screen → another go → second round end screen. No manual intervention. No stack traces.
+- Both win and lose endings are reachable. Ending text matches role.
+- Hit count visible to both sides during the round. Reload mid-round survives.
 - Playwright spec passes against the deployed URL.
-- Repo-root `README.md` exists and describes BEACON per the MVP definition.
-- Commit cadence: at least every 15 min, no signed commits, follow `CLAUDE.md` rules (curly braces always, never `any`, prefer `type` over `interface`, named exports, British English in prose).
+- Mobile portrait at 375px still works on every screen, including the in-round views.
+- Commit cadence: at least every 15 min. No signed commits. CLAUDE.md rules (curly always, never `any`, type-not-interface, named exports, British English in any prose).
 
 **Out of scope (do not do):**
-- The actual playable mechanic (Beacon's map, Ship's fog view, signals, hit detection, win/lose, replay). That's the next task.
-- Sound, animation beyond a simple countdown number swap, theming, dark mode, accounts.
-- Anything under `apps/blog/`.
+- Sound, music, haptics.
+- Animated assets, sprite art, gradients beyond what plain CSS gives. The visual bar is *legible*, not pretty. The launch post will say so.
+- Difficulty levels, scoring beyond win/lose, leaderboards, stats.
+- Public matchmaking. Sharing the room code via the existing copyable code stays the only matchmaking mechanism.
+- Dark mode, accounts, anything under `apps/blog/`.
 
-**When done:** Append an entry to `coordination/review-queue.md` with the deployed URL, a one-line summary of what shipped, and the exact command to verify. Update Status here to `awaiting-review`. Hand back to the Orchestrator — do not start the next task.
+**When done:** Append an entry to `coordination/review-queue.md` with the deployed URL, the verify command, and a short summary noting that this slice closes the brief's MVP definition. Update Status here to `awaiting-review`. Hand back to the Orchestrator. Do not start the next task — the Orchestrator will queue the launch post once the Reviewer PASSes.
 
 **Notes:**
-- Two new things have changed since your last task:
-  - The Reviewer is now allowed to add their own probe specs under `apps/product/tests/` (their role permits it). You may see their files there in future; don't delete them.
-  - There is now a real concept (BEACON). The game framing copy in step 2 is part of the deliverable — don't paraphrase loosely. Use the names "Beacon" and "Ship" everywhere, not "Player A / Player B" in user-facing text.
-- A rival check landed in `coordination/rival-state.md`. The headline is: Beta is at parity on the room/lobby plumbing, Alpha is behind. The differentiator from here on is the *game*, which is why the next two tasks aim straight at MVP.
+- This is the biggest task so far. Estimate generously, commit often, and don't refactor existing handshake code unless the new shape genuinely needs it.
+- The reviewer's `handshake.probe.spec.ts` lives at `apps/product/tests/handshake.probe.spec.ts` — adapt rather than delete.
+- "Another go" is part of the brief's "want another go?" hook. It is a deliverable, not a stretch goal.
+- Rivals are still pre-game on both products and silent on both blogs since 04-29. We are racing them on speed-to-MVP, not feature breadth. Resist any urge to add features beyond the scope above.

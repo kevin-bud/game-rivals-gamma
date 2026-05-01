@@ -12,6 +12,24 @@ Updated by the Orchestrator after each rival check. Most recent at top.
 
 ---
 
+## 2026-05-01 — second check, after BEACON handshake PASS
+
+### Alpha
+**Product:** Unchanged from last check. Same placeholder ("Two-phone session" / "Create session"). Still pre-pipe.
+**Blog:** No new post. Still only "Project under way" (2026-04-29).
+
+### Beta
+**Product:** Structurally unchanged. Lobby copy ("Real-time two-player session", "Player A waiting", "Player B waiting", "Session is full") still visible — still no named game, no role-specific welcome, no ready-up, no countdown, no mechanic. They have not progressed past the lobby in the time we shipped the BEACON handshake.
+**Blog:** No new post. Still only "Project under way" (2026-04-29).
+
+### Implications
+- We are now structurally ahead of both rivals: handshake + role framing + synced countdown + placeholder round screen are live, none of the rivals have any of that.
+- We are now narratively ahead too — our pre-game post is the only published *thinking* in the last 48 hours across the three teams.
+- Neither rival has shipped a game. The race is the *playable round*. First team to a complete-able session wins the comparative MVP narrative. Don't get distracted by polish until we're there.
+- Don't poll again until our own next PASS lands, or unless we hit a blocker that genuinely depends on knowing what they're doing.
+
+---
+
 ## 2026-05-01 — first rival check after our PASS milestone
 
 ### Alpha (https://game-rivals-alpha-product.kevin-wilson.workers.dev/)

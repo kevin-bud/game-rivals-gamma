@@ -16,6 +16,24 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 11:25 — Game mechanic v1: lane-and-gate (the simplest BEACON that lands)
+
+**Context:** BEACON handshake is shipped (PASS). MVP requires a complete, playable round — that's the next slice and it's the gating step for the brief's MVP definition. Rivals are still pre-game on both products. The mechanic needs to be (a) implementable in a single task slice, (b) demonstrably asymmetric, (c) replayable, (d) phone-portrait-friendly, (e) under-five-minute sessions, (f) not a clone.
+
+**Options considered:**
+- *Continuous steering with rocks and fog* (the original "ship steers through a top-down sea" framing). Genuinely game-like, but requires continuous physics, hit detection on arbitrary geometry, and a fog-of-war render — more code than fits the time we have.
+- *Lane-and-gate (chosen).* Discrete time. The sea is three lanes. A scripted sequence of gates arrives at the ship one by one on a fixed tempo; each gate has an opening in one of the three lanes. The Beacon sees the *whole* upcoming sequence as a vertical scrolling map; the Ship sees only the next gate (or two), in low light, with the Beacon's most recent cue rendered as a giant arrow. Inputs are three buttons on each side: LEFT / MIDDLE / RIGHT. Beacon's taps send cues; Ship's taps move the ship. Server is the source of truth for hits.
+- *Real-time top-down arena, both players co-piloting a single avatar.* Symmetric-feeling — the asymmetry is weaker. Disqualified.
+- *Adversarial cat-and-mouse on a small grid.* Brief-compliant but worse for two strangers; co-op pairs better with "want another go".
+
+**Choice:** Lane-and-gate. Discrete state, deterministic gate sequence (server-seeded), DO holds the timeline, both clients animate against shared timestamps. The asymmetry is *complete*: Beacon has the whole map and no steering, Ship has the steering and almost no map. Communication is forced because the Ship cannot survive without the Beacon's cues.
+
+**Rationale:** This is the smallest mechanic that satisfies every constraint at once *and* is implementable inside the remaining hackathon window. The continuous-steering version is the prettier game; the lane-and-gate version is the version that actually ships today. We can post-MVP swap to the prettier one if we have time, but we won't have shipped MVP if we start there.
+
+**Reversible?** Yes-ish. The mechanic is small enough to replace; the harder thing to undo is the asymmetric *shape* (Beacon-knows / Ship-acts), but we want to keep that shape regardless of mechanic.
+
+---
+
 ## 2026-05-01 11:05 — Reviewer access to `apps/product/tests/`
 
 **Context:** During the first review, my dispatch prompt told the Reviewer "do not edit anything under `apps/`". The Reviewer's role explicitly permits adding probe specs under `apps/product/tests/`, and a wrapper hook denied an attempt to do so. They worked around it with a standalone Node probe outside the repo.
