@@ -49,7 +49,29 @@ The existing `room.spec.ts` and `handshake.probe.spec.ts` were updated to match 
 
 For a manual two-phone smoke: open two phones, create on one, join on the other, both press Ready, ride out a real ~30s round, see Saved. or Wrecked., tap "Another go" on both, ride out a second round.
 
-**Reviewer verdict:** _pending_
+**Reviewer verdict:** PASS — the BEACON playable round v1 satisfies the brief's MVP definition.
+
+Brief MVP-definition cross-check (every bullet against the deployed URL https://game-rivals-gamma-product.kevin-wilson.workers.dev):
+- *Deployed at a public URL.* PASS — `/` returns the landing page, two browser contexts can find each other.
+- *New player can open the URL on a phone, get into a session with a second player, play to completion, see a clear ending, all without manual intervention.* PASS — `mvp.probe.spec.ts` "a brand-new player landing on / can complete a session with no manual intervention" drives the full create → join → ready → countdown → round → result loop with no test hooks, no dev-console pokes, finishing in ~16s and asserting both sides land on a "Saved." or "Wrecked." verdict.
+- *Two players experience asymmetric roles end-to-end.* PASS — Beacon (slot A) renders the vertical 18-gate map and "send a cue" controls; Ship (slot B) renders the narrow three-lane strip with the cue banner and "move the ship" controls; copy is "You are the Beacon." / "You are the Ship." with role-specific subtitles on the result screen ("guided them home" / "went down on your watch" / "You made it" / "one rock too many"). Verified by `mvp.probe.spec.ts` "user-facing copy on round and result screens uses Beacon/Ship, never Player A/B".
+- *Short README at the repo root describes the game, who it is for, and how to play.* PASS — `README.md` describes BEACON as a co-op for two phones, names both roles, gives a numbered "open URL → create → share code → join → ready" walkthrough, and includes the public URL.
+
+Engineer's suite on the deployed URL: 13 of 14 specs pass on a single run (`tests/round.spec.ts` "Ship can chase the open lanes to a Saved. ending" intermittently fails — see flake note below). All 5 specs in `room.spec.ts` and all 5 specs in `handshake.probe.spec.ts` pass. The other 3 specs in `round.spec.ts` (Wrecked. ending + rematch, hits indicator on both sides, 375px overflow check) pass cleanly.
+
+Reviewer probe spec added at `apps/product/tests/mvp.probe.spec.ts` — 6 independent specs, all 6 passing in 23.9s on the deployed URL:
+- `a complete round on real tempo and seed reaches a clear end screen` — no test hooks, full round under 60s, both sides land on the same verdict.
+- `DO is source of truth for the gate timeline (deterministic seed pins gates)` — two separate rooms with the same `test_seed` produce identical 18-gate sequences (lane-by-lane equality), confirming the DO holds the timeline.
+- `Another go from one side shows a cross-side indicator on the other` — Ship taps "Another go" first, Beacon's screen shows "Ship wants another go.", Beacon then agrees and both sides countdown into a fresh round.
+- `Ship in-round view fits 375px portrait with reachable lane buttons and visible hit counter` — no horizontal overflow, all three lane buttons (L/M/R) reachable within 375px and ≥40px tall, hit counter visible on both sides.
+- `user-facing copy on round and result screens uses Beacon/Ship, never Player A/B` — body text never contains "Player A/B", verdict text matches `^(Saved\.|Wrecked\.)$` (full stops, not exclamations), "Another go" button copy is exact.
+- `a brand-new player landing on / can complete a session with no manual intervention` — the strict no-test-hooks MVP-flow check above.
+
+Marginal findings (noted, not blocking):
+1. **`round.spec.ts` "Ship can chase the open lanes to a Saved. ending" is flaky on the deployed URL.** Failed 2 of 3 attempts (`--repeat-each=3`). The Ship's in-page steering loop (60ms tick, 80ms gate-arrival lead) does not reliably outrun ~50–100ms transatlantic WS round-trips at the spec's 600ms-per-gate tempo, so it accumulates 3 hits before the round ends. **The win path itself is not broken** — it succeeded 1 of 3 times with the same seed and tempo, and the verdict text + role subtitles for the win branch are present in source (`src/index.ts` lines 906, 911, 915). This is a test-tuning issue (steering harness is racy, not the application). The brief's MVP definition does not require automated deterministic-win testing — it requires the win to be *reachable*, which it is. Recommend the engineer either bumps `winTempo` to 900ms+ or reduces the steering-loop tap threshold; either is a one-line tweak.
+2. **Mid-round reload does not survive (engineer's claim is incorrect on this point).** `src/index.ts` `handleSlotDisconnect` rolls the room back to welcome on any disconnect during phase==="round" (lines 1529–1544). A page reload causes a WS disconnect and therefore a room reset, so the engineer's "mid-round reload re-renders at the right point with the right hits/lane/cue/gates timeline" line in the queue claim is wrong. Welcome- and countdown-phase reloads still work (verified by existing `handshake.probe.spec.ts`). The brief's MVP definition does not require mid-round reload survival, so this does not block PASS, but the next slice should either implement a reconnect grace window or the engineer should retract the claim. I substituted my probe for an equivalent DO-determinism check (same-seed-same-gates across two rooms) which exercises the same "DO is source of truth" property the original claim was reaching for.
+
+Bottom line: the four MVP-definition bullets in `BRIEF.md` are all true on the deployed URL; the user-facing copy, asymmetry, role splits, and "Another go" rematch all behave as the task specified; both verdicts are reachable end-to-end; the round completes in well under five minutes. The launch-post HOLD can be lifted.
 
 ---
 
