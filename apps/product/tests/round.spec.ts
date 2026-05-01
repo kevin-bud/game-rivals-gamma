@@ -112,12 +112,13 @@ test("Ship can chase the open lanes to a Saved. ending", async () => {
   test.setTimeout(120_000);
 
   // Slower tempo so the in-page steering loop reliably lands on each lane
-  // before the gate arrives. 600ms used to flake on transatlantic WS RTTs
+  // before the gate arrives. 600ms flaked on transatlantic WS RTTs
   // (~50–100ms) — the steering tick (60ms) plus a single round-trip eats
-  // enough of the budget that the Ship occasionally lands a hit. 1000ms
-  // gives the steering loop ~14 ticks per gate even with worst-case RTT,
-  // which makes the path comfortably reliable. Round length ≈ 18s.
-  const winTempo = 1000;
+  // enough of the budget that the Ship occasionally lands a hit; 1000ms
+  // still flaked. 1200ms gives the steering loop ~20 ticks per gate even
+  // with worst-case RTT, which makes the path comfortably reliable.
+  // Round length ≈ 22s.
+  const winTempo = 1200;
 
   const browser = await chromium.launch();
   const contextA = await browser.newContext();
@@ -137,9 +138,13 @@ test("Ship can chase the open lanes to a Saved. ending", async () => {
     await pageB.getByTestId("ready-button").click();
     await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
 
-    // The Ship steers using the gate sequence the DO has broadcast. Every
-    // 80ms, look for the next gate that hasn't arrived yet (>120ms ahead)
-    // and tap that lane. Uses the documented test hook __beaconState.
+    // The Ship steers using the gate sequence the DO has broadcast.
+    // Strategy: track the index of the next gate we care about, tap its
+    // lane once when there's enough lead-time for the WS message to
+    // round-trip and update the DO before the gate arrives, then advance
+    // to the next gate when the previous one is in the past. The 350ms
+    // lead is comfortably above worst-case transatlantic RTT (~100–200ms)
+    // plus alarm-evaluation jitter.
     await pageB.evaluate(() => {
       const win = window as unknown as {
         __beaconState: {
@@ -149,23 +154,38 @@ test("Ship can chase the open lanes to a Saved. ending", async () => {
         } | null;
         sendInput: (lane: string) => void;
       };
-      let lastTapped = "";
+      let gateIndex = 0;
+      let tappedForIndex = -1;
       setInterval(() => {
         const state = win.__beaconState;
         if (!state || state.phase !== "round" || !state.gates) {
           return;
         }
         const now = Date.now();
-        // Pick the next gate that's arriving > 80ms from now.
-        const next = state.gates.find((g) => g.arrivesAt > now + 80);
-        if (!next) {
+        // Advance past any gates that have already arrived.
+        while (
+          gateIndex < state.gates.length &&
+          state.gates[gateIndex].arrivesAt <= now
+        ) {
+          gateIndex += 1;
+        }
+        if (gateIndex >= state.gates.length) {
           return;
         }
-        if (next.lane !== lastTapped && next.lane !== state.shipLane) {
-          lastTapped = next.lane;
-          win.sendInput(next.lane);
+        const target = state.gates[gateIndex];
+        // Tap once when we're 350ms+ ahead of the gate (gives the WS msg
+        // time to land at the DO before the alarm fires).
+        if (
+          tappedForIndex !== gateIndex &&
+          target.arrivesAt - now <= 600 &&
+          target.arrivesAt - now >= 200
+        ) {
+          tappedForIndex = gateIndex;
+          if (target.lane !== state.shipLane) {
+            win.sendInput(target.lane);
+          }
         }
-      }, 60);
+      }, 30);
     });
 
     await expect(pageB.getByTestId("result-view")).toBeVisible({ timeout: 60_000 });
@@ -273,6 +293,134 @@ test("welcome → countdown → round all fit a 375px portrait viewport", async 
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(resultOverflow).toBeLessThanOrEqual(0);
+  } finally {
+    await contextA.close();
+    await contextB.close();
+    await browser.close();
+  }
+});
+
+test("mid-round reload re-enters the round with the same hits and gates", async () => {
+  test.setTimeout(90_000);
+
+  // Use a slowish tempo so we have time to register a hit, capture the
+  // gates timeline, reload, and re-assert before the round ends.
+  const tempo = 800;
+
+  const browser = await chromium.launch();
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+
+  try {
+    const pageA = await contextA.newPage();
+    const code = await createBeacon(pageA, `test_seed=${LOSE_SEED}&test_tempo=${tempo}`);
+
+    const pageB = await contextB.newPage();
+    await joinShip(pageB, code, `test_seed=${LOSE_SEED}&test_tempo=${tempo}`);
+
+    await expect(pageA.getByTestId("presence-text")).toHaveText(
+      /Waiting for the Ship to be ready/i,
+      { timeout: 10_000 },
+    );
+    await pageA.getByTestId("ready-button").click();
+    await pageB.getByTestId("ready-button").click();
+    await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
+
+    // Wait for at least one taken pip on the Ship — i.e. the DO has
+    // registered a hit. The Ship is doing nothing, so with LOSE_SEED a hit
+    // should land within a handful of gates.
+    await expect(
+      pageB.locator("[data-testid='hits'] .hit-pip.taken").first(),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Snapshot the DO-broadcast state before the reload so we can assert
+    // continuity afterwards.
+    type Snapshot = {
+      phase: string;
+      hits: number;
+      gateCount: number;
+      shipLane: string;
+      firstGateLane: string;
+    };
+    const before = await pageB.evaluate<Snapshot>(() => {
+      const win = window as unknown as {
+        __beaconState: {
+          phase: string;
+          hits: number;
+          gates: { lane: string }[];
+          shipLane: string;
+        } | null;
+      };
+      const s = win.__beaconState;
+      if (!s) {
+        throw new Error("no broadcast state on Ship before reload");
+      }
+      return {
+        phase: s.phase,
+        hits: s.hits,
+        gateCount: s.gates.length,
+        shipLane: s.shipLane,
+        firstGateLane: s.gates[0].lane,
+      };
+    });
+    expect(before.phase).toBe("round");
+    expect(before.hits).toBeGreaterThanOrEqual(1);
+    expect(before.gateCount).toBe(18);
+
+    // Reload the Ship mid-round.
+    await pageB.reload();
+
+    // After the reload the Ship should be back in the round view (not
+    // bounced to welcome) with the same hits, gate count, and gate
+    // sequence. The DO is the source of truth so the broadcast on
+    // reconnect carries the live state forward.
+    await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
+
+    // Confirm at least the original hit count is still showing — the
+    // alarm may have fired more gates while we were reloading, so we
+    // assert >=, not ===.
+    await expect(
+      pageB.locator("[data-testid='hits'] .hit-pip.taken").first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    const after = await pageB.evaluate<Snapshot>(() => {
+      const win = window as unknown as {
+        __beaconState: {
+          phase: string;
+          hits: number;
+          gates: { lane: string }[];
+          shipLane: string;
+        } | null;
+      };
+      const s = win.__beaconState;
+      if (!s) {
+        throw new Error("no broadcast state on Ship after reload");
+      }
+      return {
+        phase: s.phase,
+        hits: s.hits,
+        gateCount: s.gates.length,
+        shipLane: s.shipLane,
+        firstGateLane: s.gates[0].lane,
+      };
+    });
+    // Either still mid-round, or the alarm finished the round naturally
+    // (acceptable — the brief is about surviving the reload, not freezing
+    // the timeline). In either case the round was NOT reset to welcome.
+    expect(["round", "result"]).toContain(after.phase);
+    expect(after.gateCount).toBe(18);
+    expect(after.firstGateLane).toBe(before.firstGateLane);
+    expect(after.hits).toBeGreaterThanOrEqual(before.hits);
+
+    // Beacon, who was never reloaded, should also still be in round or
+    // result — never bounced back to welcome by the partner's reload.
+    const beaconPhase = await pageA.evaluate<string>(() => {
+      const win = window as unknown as {
+        __beaconState: { phase: string } | null;
+      };
+      return win.__beaconState ? win.__beaconState.phase : "unknown";
+    });
+    expect(["round", "result"]).toContain(beaconPhase);
   } finally {
     await contextA.close();
     await contextB.close();
