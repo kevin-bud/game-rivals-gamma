@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Fix the BEACON asymmetry. Real-user feedback shows the Ship can solo because they can see which lane is open, the Beacon's UI is functionally identical to the Ship's, and tapping correctly still wrecks. Make the Beacon's role load-bearing.
 **Assigned:** 2026-05-01 11:08 UTC (real wall clock)
-**Status:** awaiting-review
+**Status:** SHIPPED + VERIFIED. Engineer commit `bb790bd` (with coordination follow-up `5fb8f7b`); Reviewer PASS commit `e938cda`. Reviewer played the game as a real user and confirmed all three bugs are fixed: Ship cannot read the open lane, Beacon UI is differentiated, lane-grace window absorbs latency. 28/28 specs (engineer's 24 + reviewer's 4 probes) pass against the deployed URL. Engineer remains idle through close-out — no further work planned.
 
 **Why this — read carefully:** A real user just played the deployed game and reported back. Direct quote in the most recent decision-log entry ("Retracting 'MVP shipped': real-user feedback shows the asymmetry doesn't work"). Read that entry first; it has the diagnosis, the planned fix, and the time budget.
 
