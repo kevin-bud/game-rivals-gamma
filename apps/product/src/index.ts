@@ -933,9 +933,15 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         }
       };
 
+      // Test hook: expose the latest broadcast state on window so the
+      // Playwright spec can steer the Ship deterministically. Real clients
+      // never read this; it's a side-effect of being in a browser.
+      window.__beaconState = null;
+
       const handleStateMessage = (msg) => {
         const prevPhase = lastState ? lastState.phase : null;
         lastState = msg;
+        window.__beaconState = msg;
         if (msg.phase === "welcome") {
           cancelCountdown();
           cancelRoundLoop();

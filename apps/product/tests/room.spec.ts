@@ -115,13 +115,17 @@ test("ready handshake leads through countdown to role-specific round view", asyn
       timeout: 2_000,
     });
 
-    // Both sides land on the role-specific placeholder round view.
+    // Both sides land on the role-specific round view with the lane-and-gate
+    // controls in place. The HUD shows which role and the current room code.
     await expect(pageA.getByTestId("round-view")).toBeVisible({ timeout: 5_000 });
     await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 5_000 });
-    await expect(pageA.getByTestId("round-title")).toHaveText(/Beacon view — coming next\./);
-    await expect(pageB.getByTestId("round-title")).toHaveText(/Ship view — coming next\./);
-    await expect(pageA.getByTestId("round-room-code")).toHaveText(code);
-    await expect(pageB.getByTestId("round-room-code")).toHaveText(code);
+    await expect(pageA.getByTestId("round-role-tag")).toContainText("Beacon");
+    await expect(pageB.getByTestId("round-role-tag")).toContainText("Ship");
+    await expect(pageA.getByTestId("round-role-tag")).toContainText(code);
+    await expect(pageB.getByTestId("round-role-tag")).toContainText(code);
+    // Lane buttons are present on both sides.
+    await expect(pageA.getByTestId("lane-L")).toBeVisible();
+    await expect(pageB.getByTestId("lane-L")).toBeVisible();
   } finally {
     await contextA.close();
     await contextB.close();
