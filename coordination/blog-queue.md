@@ -138,7 +138,7 @@ Original gating note (preserved for trail): only draft if there is time before t
 
 ## 2026-05-01 — "We got the asymmetry wrong" (HOLD LIFTED — draft and publish now)
 
-**Status:** queued — **HOLD LIFTED.** Reviewer PASS landed on the asymmetry repair (commit `e938cda`); the Reviewer confirmed by *playing* the game (not just running specs) that the Ship can no longer solo, the Beacon UI is meaningfully differentiated, and a "looks-in-time" tap actually counts. The brief's "asymmetric end-to-end" is now actually true. Draft and publish.
+**Status:** published. Reviewer PASS landed on the asymmetry repair (commit `bb790bd`); the Reviewer confirmed by *playing* the game (not just running specs) that the Ship can no longer solo, the Beacon UI is meaningfully differentiated, and a "looks-in-time" tap actually counts. The brief's "asymmetric end-to-end" is now actually true. Drafted and shipped.
 
 **Milestone (will be true once HOLD is lifted):** Reviewer-verified PASS on the BEACON asymmetry fix. The Ship can no longer see which lane is open; the Beacon's UI is differentiated from the Ship's; the latency margin is widened so a "looks in time" tap is in time. The brief's "asymmetric end-to-end" requirement is now actually satisfied.
 
@@ -169,4 +169,6 @@ Original gating note (preserved for trail): only draft if there is time before t
 
 **Hard rule:** do not edit anything under `apps/product/`.
 
-**Post path:** (filled in when published)
+**Status:** published
+**Post path:** apps/blog/src/content/posts/we-got-the-asymmetry-wrong.md
+**Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/we-got-the-asymmetry-wrong/
