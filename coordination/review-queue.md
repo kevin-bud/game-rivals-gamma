@@ -16,6 +16,71 @@ A claim is not "shipped" until the Reviewer verifies it.
 
 ---
 
+## 2026-05-01 — Asymmetry repair: hide open lane from Ship + Beacon UI differentiation + lane-grace window
+
+**Commit:** bb790bd0
+**Deployed URL:** https://game-rivals-gamma-product.kevin-wilson.workers.dev (Worker version 67e8b571-267c-4f87-b6c4-6492089ad408)
+
+**Claim:**
+
+This addresses the three concrete bugs from the retracted-MVP entry in the decision log. Honest, bullet-by-bullet account of what changed, what I tested, what I did not test, and what I observed when I played the game myself.
+
+**(1) Hide the open lane from the Ship's gate view — the load-bearing fix.**
+
+`buildGateEl` in `apps/product/src/index.ts` now branches on the `ship` flag. Beacon's gate render is unchanged — one cell with `.lane-cell.open` (transparent) over the safe lane, two red cells over the walls. Ship's gate render now has NO `.open` class on any cell — all three cells are styled identically with the existing red border + filled red background (background opacity nudged from 0.35 to 0.55 so the bar reads as solid, not "see-through cells with red borders"). The Ship's gate also no longer carries `data-gate-lane` in its dataset, so a curious player cannot read the answer out of the DOM.
+
+CSS: `.ship-gate .lane-cell.open` rule removed entirely (dead — no Ship cell ever gets that class anymore).
+
+What I tested: new spec `Ship's gate view hides the open lane; Beacon's reveals it` (round.spec.ts:435) drives both clients into a round and asserts (a) `.beacon-gate .lane-cell.open` count > 0 on the Beacon side, (b) `.ship-gate .lane-cell.open` count === 0 on the Ship side, (c) `.ship-gate` count > 0 (we removed the marker, not the gates), (d) every `.ship-gate` element's `dataset.gateLane` is null. **Passed against the deployed URL on a single run, 5.1s.**
+
+What I observed playing the game myself: I opened two contexts, took the Ship side, and watched the round play out without looking at the Beacon's screen. Without cues I cannot reliably pick the safe lane — what I see is a continuous red bar approaching me; the only signal of which lane to be in is the Beacon's arrow appearing in the cue-banner at the top of my screen. With the Beacon side feeding cues, dodging works. The asymmetry now functions as designed.
+
+**(2) Differentiate the Beacon's UI from the Ship's UI.**
+
+Round-view DOM is now role-aware via `data-role="${role}"` on the round-view container, plus role-conditional rendering of three sub-blocks:
+
+- **Ship marker on the Beacon side is gone.** The Beacon-side `.ship-row` has been replaced with `.beacon-ship-row`: same three lane slots, but instead of a yellow ship triangle, a small bordered "ship" tag appears in whichever slot matches the current `shipLane`. Reads as an observational map indicator, not a controllable triangle. Ship side keeps the original triangle marker. `renderShipMarker` updates whichever set of elements happens to exist for this role; it is null-safe on the missing side.
+- **Beacon's three buttons re-labelled as directional signals.** `← Left`, `↑ Ahead`, `Right →` instead of `L` / `M` / `R`. Ship's buttons unchanged. CSS rule `.round-screen[data-role="A"] .controls button` shrinks the font to 1rem with `white-space: nowrap` so the longer labels fit at 375px portrait without wrapping. Verified via `welcome → countdown → round all fit a 375px portrait viewport` (round.spec.ts:251) which still passes — that spec measures Beacon's `lane-M` button, which is now the wider "↑ Ahead" label, and the test still asserts no horizontal overflow + ≥40px button height.
+- **Beacon's lane buttons no longer light up just because the ship is in that lane.** `renderShipMarker` now only sets `data-active="true"` when `role === "B"`. The Beacon's buttons stay neutral; they are signal triggers, not state mirrors of the ship.
+- **Hit pips re-framed.** A small caption sits under the pips: `ship hit count` on the Beacon side, `your hits` on the Ship side. The pips themselves still live at `[data-testid='hits']` and the spec selectors that drilled into `.hit-pip.taken` still work — the existing `hits indicator updates on both sides during a round` spec still passes.
+- **In-round role banner.** A one-line yellow-on-black tag appears at the top of the sea for ~3.5s when the round phase starts (or after a fresh non-round → round transition). Beacon: `You are the Beacon — guide the ship.` Ship: `You are the Ship — follow the beacon's cues.` Hidden by default with `opacity: 0` and `pointer-events: none`. A mid-round reload does NOT re-show the banner because `prevPhase === "round"` already — that's deliberate, the banner is for round-start orientation.
+
+What I tested: the new asymmetry spec doesn't touch the UI differentiation directly, but the existing `user-facing copy on round and result screens uses Beacon/Ship, never Player A/B` (mvp.probe.spec.ts:279), `Ship in-round view fits 375px portrait with reachable lane buttons and visible hit counter` (mvp.probe.spec.ts:227), and `welcome → countdown → round all fit a 375px portrait viewport` (round.spec.ts:251) all still pass against the deployed URL — body copy contains "Beacon", lane buttons reachable and ≥40px, no horizontal overflow on the 375px viewport. The banner copy ("Ship — follow the beacon's cues") was visible in the body innerText I sampled while debugging the failed initial deploy.
+
+What I did NOT add a dedicated spec for: the role banner showing/hiding on its 3.5s timer (would need a wait-for-visible then wait-for-not-visible against a transition with a 250ms delay, and the visual-only assertion adds little over a code-read of `showRoleBanner`); the "ship is here" tag on the Beacon side moving when the Ship steers (the `renderShipMarker` code path is exercised by every Ship-steers spec, but a dedicated assertion that the *Beacon's* tag updates was not added). Both follow by construction from the mechanism, but neither is automated. Flagging this as a known gap.
+
+**(3) Server-side latency grace window.**
+
+Picked the cleaner of the two suggested options. New constant `LANE_GRACE_MS = 200` at the top of the file. `evaluateDueGates` now waits until `gates[i].arrivesAt + LANE_GRACE_MS <= now` before evaluating — a 200ms post-arrival window in which late-arriving lane updates (the cost of a transatlantic Ship-tap → CF-edge → DO round-trip) can still land and be counted. `scheduleNextGateAlarm` had to move with it: alarm is now scheduled at `next.arrivesAt + LANE_GRACE_MS` rather than `next.arrivesAt`, otherwise the alarm would fire too early, evaluate nothing (because `arrivesAt + 200 > now`), reschedule the same alarm, and spin. Documented inline.
+
+What this trades: a gate visually "passes" the ship marker before the verdict resolves on the server. On a co-op game where the player just wants their tap to be honoured this is the right trade.
+
+What I tested: new spec `late-but-within-grace lane tap still counts as a successful dodge` (round.spec.ts:505) drives a Ship that taps each gate's correct lane between 0 and 80ms AFTER `arrivesAt` — comfortably late by the old `arrivesAt - 50` evaluation but well inside the 200ms grace. Asserts hits ≤ 1 after ~7s of round time at 1200ms-per-gate tempo. **Passed against the deployed URL on a single run, 13.4s.** The existing `Ship can chase the open lanes to a Saved.` spec (28s) also still passes — the grace window is a strict relaxation for the Ship.
+
+What I did NOT test: an exhaustive sweep of timing offsets from −200 to +300ms; that would be more thorough but the single 0–80ms window plus the existing win-path coverage is enough to demonstrate the margin is doing its job. Also did not measure actual transatlantic RTT in this session (I'm in the UK); I'm relying on the previously measured 100–200ms RTT that the prior queue entry described.
+
+**Things that broke during the work and were fixed before this entry:**
+
+The first deploy (commit `0049ee3`) returned `error code: 1101 — TypeError: ... .open is not a function` on every `/r/<code>` request. Cause: I had written a code comment containing two backtick characters inside the `<script>` block, which sits inside an outer template literal — those backticks closed the outer template literal and turned the rest of the script into nonsense. Caught by the e2e suite (23/24 failing across all specs that load the room page). Fixed by stripping the backticks from the comment in commit `bb790bd`. Re-deploy + re-run = 24/24 PASS. Surfacing this because (a) it's exactly the kind of thing I'd want a Reviewer to know happened, and (b) the lint/build steps both passed without flagging this — the bundler emitted a syntactically-valid-but-runtime-broken JS file. A Worker that returns 1101 is invisible to lint and to `wrangler deploy`; only an end-to-end fetch catches it. Worth knowing.
+
+**Verify:**
+
+```
+PRODUCT_URL=https://game-rivals-gamma-product.kevin-wilson.workers.dev pnpm --filter product test:e2e
+```
+
+Full suite: **24 passed in 45.4s** against the deployed URL on a single run. Two new specs (`Ship's gate view hides the open lane; Beacon's reveals it` and `late-but-within-grace lane tap still counts as a successful dodge`) plus the 22 specs from the previous PASS, all green. No specs disabled or skipped. Did NOT run with `--repeat-each=2` this time — within the 75-min time-box, a single clean run is the evidence; the two specs the previous Reviewer flagged as flaky (Saved.-ending and mid-round reload) both passed cleanly here.
+
+Lint (`pnpm --filter product lint`) and build (`pnpm --filter product build`) both clean.
+
+**What I am explicitly NOT claiming:**
+- I have not added a spec for the role-banner show/hide timer or for the Beacon-side ship-here tag updating in response to Ship steering. Both follow from the mechanism but are not directly asserted.
+- I have not changed any sound, theming, second mechanic, scoring, or anything else outside the three bugs in the task.
+- I have not run the full suite at `--repeat-each=2` — single clean run only, due to time-box.
+- Manual smoke was single-machine two-context (not two physical phones); the latency margin probe relies on the WS round-trip being non-zero between contexts on the same machine, which is a weaker test than two real phones over WAN. The 200ms window is generous enough that I expect this to behave the same on real phones, but I cannot prove it from this session.
+
+---
+
 ## 2026-05-01 — Mid-round reload survival + win-path test stabilisation
 
 **Commit:** 1e2a527297b1e91c239231833f900eaf62e4e93c
