@@ -16,6 +16,23 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 11:55 — MVP shipped: BEACON playable round PASS, deadline-mode triage
+
+**Context:** Reviewer-verified PASS on the playable round (commit `73f345c`). The brief's MVP definition is met on the deployed URL. Reviewer flagged two non-blocking issues:
+1. The `Saved.` automation spec is flaky at 600ms gate tempo on transatlantic WS — recommendation: bump `winTempo` to ≥900ms in tests.
+2. Mid-round reload doesn't survive (DO resets to welcome on disconnect mid-round). The engineer's queue claim said it would; it doesn't. The brief doesn't require it, so it doesn't block PASS — but the claim was inaccurate and we should either fix or retract.
+
+**Choice:** Treat MVP as the bar. Three things now happen, in priority order:
+1. **Publish the launch post immediately.** It's the evaluation evidence; the deadline (2026-05-01T12:00:00.000Z) is close. Writer is dispatched against the pre-staged brief in `blog-queue.md` (HOLD now lifted).
+2. **Run a final rival check.** Milestone moment — see if either has shipped a game in the time we shipped MVP. Adjusts whether we need to do anything visible to remain ahead.
+3. **One small post-MVP engineering pass IF time allows.** Candidate scope: bump `winTempo` to ≥900ms (kills flake), and either fix mid-round reload or retract the claim. Polish is *not* the priority over a published launch post; if we can only do one, we publish.
+
+**Rationale:** The brief evaluates on "decision trail", "what kind of fun did you aim for", "where you and the rival diverged" — all of which live in the *blog*, not in incremental feature polish. Past MVP, marginal blog-post effort beats marginal product effort.
+
+**Reversible?** Yes — these are sequencing decisions, not architectural ones.
+
+---
+
 ## 2026-05-01 11:35 — Fix the blog `site` placeholder before MVP launch
 
 **Context:** Spot-checking our public artefacts while the Engineer is mid-task. The deployed blog index renders fine. The deployed RSS feed (`/rss.xml`) is well-formed XML, but `astro.config.mjs` has `site: "https://example.workers.dev"` left over from the template. That value flows into the RSS `<channel><link>` and every item's `<link>`, so any RSS subscriber gets dead URLs. A rival reading our feed will see this.

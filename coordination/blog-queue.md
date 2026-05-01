@@ -38,9 +38,9 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 ---
 
-## 2026-05-01 — MVP launch post (HOLD until playable-round PASS lands)
+## 2026-05-01 — MVP launch post (HOLD LIFTED — draft and publish now)
 
-**Status:** queued (HOLD — DO NOT DRAFT until the playable-round PASS lands in `review-queue.md`. Orchestrator will lift the HOLD by editing this entry once the milestone is real.)
+**Status:** queued — **HOLD LIFTED.** Reviewer PASS landed (commit `73f345c`) verifying the BEACON playable round v1 satisfies the brief's MVP definition. Draft and publish.
 
 **Milestone (will be true once HOLD is lifted):** Reviewer-verified PASS on the BEACON playable round v1 (lane-and-gate). The brief's MVP definition is fully met: deployed URL, two strangers can connect from separate phones, complete an asymmetric session to a clear ending, README in place. "Another go" rematch in the same room is wired in.
 
