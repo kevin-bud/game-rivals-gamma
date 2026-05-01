@@ -112,8 +112,12 @@ test("Ship can chase the open lanes to a Saved. ending", async () => {
   test.setTimeout(120_000);
 
   // Slower tempo so the in-page steering loop reliably lands on each lane
-  // before the gate arrives. 600ms / gate × 18 gates ≈ 13s round.
-  const winTempo = 600;
+  // before the gate arrives. 600ms used to flake on transatlantic WS RTTs
+  // (~50–100ms) — the steering tick (60ms) plus a single round-trip eats
+  // enough of the budget that the Ship occasionally lands a hit. 1000ms
+  // gives the steering loop ~14 ticks per gate even with worst-case RTT,
+  // which makes the path comfortably reliable. Round length ≈ 18s.
+  const winTempo = 1000;
 
   const browser = await chromium.launch();
   const contextA = await browser.newContext();

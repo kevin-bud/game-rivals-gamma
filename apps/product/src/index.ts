@@ -1527,20 +1527,13 @@ export class Room implements DurableObject {
       this.ready = { A: false, B: false };
     }
     if (this.phase === "round") {
-      // Mid-round disconnect: roll the room back to welcome so the survivor
-      // can re-handshake when the partner returns.
-      this.phase = "welcome";
-      this.ready = { A: false, B: false };
-      this.gates = [];
-      this.nextGateIndex = 0;
-      this.shipLane = "M";
-      this.hits = 0;
-      this.latestCue = null;
-      this.result = "playing";
-      this.roundStartedAt = null;
-      this.state.storage.deleteAlarm().catch(() => {
-        // ignore
-      });
+      // Mid-round disconnect: keep the round alive so a reload can re-enter
+      // at the right phase with the right gates timeline, hits, lane, and
+      // cue. The DO is the source of truth; the alarm continues firing and
+      // gates evaluate against the last-known shipLane (Ship-drop) and the
+      // last-known cue stays visible (Beacon-drop). If the survivor wants
+      // to abandon they can navigate away; we deliberately do not reset.
+      // No alarm change here — the existing setAlarm continues to fire.
     }
     if (this.phase === "result") {
       // Stay in result so the survivor still sees the verdict, but their
