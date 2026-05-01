@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Stand up a minimal real-time room in `apps/product` so two phones can find each other on the deployed URL.
 **Assigned:** 2026-05-01 10:25
-**Status:** assigned
+**Status:** in-progress
 
 **Why this first:** Real-time multiplayer is the riskiest constraint in the brief. Proving the pipe (Durable Object + WebSocket on Cloudflare) before picking a game keeps every later design choice cheap. The specific game is deliberately not yet decided — do not design game mechanics into this task.
 
