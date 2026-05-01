@@ -26,7 +26,7 @@ to reflect the new toolchain.
 URL and asserts a 200 response and the page body contains the expected
 content. The Reviewer agent extends this — every shipped feature should
 get a Playwright test. Tests run against `PRODUCT_URL` if set, otherwise
-against `http://localhost:8787` for local dev.
+against `http://localhost:8789` for local dev.
 
 Keep the tests passing. The Reviewer gates "shipped" claims on green
 tests against the deployed URL.
