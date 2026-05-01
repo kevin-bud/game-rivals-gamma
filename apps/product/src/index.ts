@@ -320,6 +320,18 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         letter-spacing: 0.15em;
         opacity: 0.7;
       }
+      .hits-block {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0.15rem;
+      }
+      .hits-caption {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        opacity: 0.55;
+      }
       .hits {
         display: flex;
         gap: 0.4rem;
@@ -449,6 +461,62 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
       }
       .cue-banner.visible { opacity: 1; }
 
+      /* In-round role banner. Shows for ~3.5s at the start of each round
+         so each player sees a one-line confirmation of which side of the
+         co-op they are. The brief asks for the asymmetry to be obvious;
+         this is the in-round version of the welcome card's framing copy. */
+      .role-banner {
+        position: absolute;
+        top: 3.4rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0,0,0,0.72);
+        color: #ffe066;
+        padding: 0.5rem 0.9rem;
+        border-radius: 0.4rem;
+        font-size: 0.85rem;
+        font-weight: 600;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 250ms ease-out;
+        z-index: 5;
+        text-align: center;
+        max-width: 90%;
+      }
+      .role-banner.visible { opacity: 1; }
+
+      /* Beacon's "ship is here" tag at the bottom of the gate map. The
+         Beacon does NOT play the ship; this is a small observational
+         indicator, not a steering control. Only one of the three slots is
+         visible at any time (the lane the ship is currently in). */
+      .beacon-ship-row {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 4rem;
+        display: flex;
+        border-top: 1px dashed rgba(255,255,255,0.25);
+        background: rgba(255,224,102,0.04);
+      }
+      .beacon-ship-slot {
+        flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .beacon-ship-here {
+        display: none;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.18em;
+        font-weight: 700;
+        color: #0b1626;
+        background: #ffe066;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.25rem;
+      }
+
       /* Bottom controls bar — three big lane buttons. */
       .controls {
         flex-shrink: 0;
@@ -473,6 +541,15 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
       .controls button[data-active="true"] {
         background: #2266ee;
         outline: 2px solid #ffe066;
+      }
+      /* Beacon's buttons are signal labels with words, not single
+         characters, so they need a smaller font to fit within a 375px
+         portrait viewport without wrapping. */
+      .round-screen[data-role="A"] .controls button {
+        font-size: 1rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
       }
 
       /* End-of-round screen. */
@@ -572,30 +649,54 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
       <div class="num" data-testid="countdown-number">3</div>
     </div>
 
-    <div id="round-view" class="round-screen hidden" data-testid="round-view">
+    <div id="round-view" class="round-screen hidden" data-role="${role}" data-testid="round-view">
       <div class="hud">
         <div class="role-tag" data-testid="round-role-tag">${role === "A" ? "Beacon" : "Ship"} · room ${code}</div>
-        <div class="hits" data-testid="hits" id="hits">
-          <span class="hit-pip" data-pip="0"></span>
-          <span class="hit-pip" data-pip="1"></span>
-          <span class="hit-pip" data-pip="2"></span>
+        <div class="hits-block">
+          <div class="hits" data-testid="hits" id="hits">
+            <span class="hit-pip" data-pip="0"></span>
+            <span class="hit-pip" data-pip="1"></span>
+            <span class="hit-pip" data-pip="2"></span>
+          </div>
+          <div class="hits-caption" data-testid="hits-caption">${
+            role === "A" ? "ship hit count" : "your hits"
+          }</div>
         </div>
       </div>
+      <div class="role-banner" id="role-banner" data-testid="role-banner">${
+        role === "A"
+          ? "You are the Beacon — guide the ship."
+          : "You are the Ship — follow the beacon's cues."
+      }</div>
       <div class="sea" id="sea" data-testid="sea">
         <div class="lane-divider one"></div>
         <div class="lane-divider two"></div>
         <div class="cue-banner" id="cue-banner" data-testid="cue-banner"></div>
         <div id="gates-layer"></div>
-        <div class="ship-row">
+        ${
+          role === "A"
+            ? `<div class="beacon-ship-row" data-testid="beacon-ship-row">
+          <div class="beacon-ship-slot"><div class="beacon-ship-here" data-lane-here="L" id="here-L">ship</div></div>
+          <div class="beacon-ship-slot"><div class="beacon-ship-here" data-lane-here="M" id="here-M">ship</div></div>
+          <div class="beacon-ship-slot"><div class="beacon-ship-here" data-lane-here="R" id="here-R">ship</div></div>
+        </div>`
+            : `<div class="ship-row" data-testid="ship-row">
           <div class="lane-slot"><div class="ship-marker" data-lane-marker="L" id="marker-L"></div></div>
           <div class="lane-slot"><div class="ship-marker" data-lane-marker="M" id="marker-M"></div></div>
           <div class="lane-slot"><div class="ship-marker" data-lane-marker="R" id="marker-R"></div></div>
-        </div>
+        </div>`
+        }
       </div>
       <div class="controls" data-testid="controls">
-        <button type="button" data-lane="L" data-testid="lane-L" onclick="sendInput('L')">L</button>
-        <button type="button" data-lane="M" data-testid="lane-M" onclick="sendInput('M')">M</button>
-        <button type="button" data-lane="R" data-testid="lane-R" onclick="sendInput('R')">R</button>
+        <button type="button" data-lane="L" data-testid="lane-L" onclick="sendInput('L')">${
+          role === "A" ? "&larr; Left" : "L"
+        }</button>
+        <button type="button" data-lane="M" data-testid="lane-M" onclick="sendInput('M')">${
+          role === "A" ? "&uarr; Ahead" : "M"
+        }</button>
+        <button type="button" data-lane="R" data-testid="lane-R" onclick="sendInput('R')">${
+          role === "A" ? "Right &rarr;" : "R"
+        }</button>
       </div>
     </div>
 
@@ -629,16 +730,26 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
       const subtitleEl = document.getElementById("subtitle");
       const partnerNoteEl = document.getElementById("partner-note");
       const againBtn = document.getElementById("again-btn");
+      // The Ship sees their own position as a triangle in the lane row;
+      // the Beacon sees a small "ship" tag at the bottom of the gate map.
+      // Same data wiring, different DOM, so the renderer uses whichever
+      // set of elements happens to exist for this role.
       const markerEls = {
         L: document.getElementById("marker-L"),
         M: document.getElementById("marker-M"),
         R: document.getElementById("marker-R"),
+      };
+      const beaconHereEls = {
+        L: document.getElementById("here-L"),
+        M: document.getElementById("here-M"),
+        R: document.getElementById("here-R"),
       };
       const laneButtons = {
         L: document.querySelector("[data-lane='L']"),
         M: document.querySelector("[data-lane='M']"),
         R: document.querySelector("[data-lane='R']"),
       };
+      const roleBannerEl = document.getElementById("role-banner");
 
       let ws;
       let backoff = 500;
@@ -822,13 +933,24 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
 
       const renderShipMarker = (state) => {
         for (const lane of ["L", "M", "R"]) {
+          // Ship side: the triangle marker in the lane row.
           const marker = markerEls[lane];
-          marker.style.display = lane === state.shipLane ? "block" : "none";
+          if (marker) {
+            marker.style.display = lane === state.shipLane ? "block" : "none";
+          }
+          // Beacon side: the small "ship" tag under the gate map.
+          const here = beaconHereEls[lane];
+          if (here) {
+            here.style.display = lane === state.shipLane ? "block" : "none";
+          }
         }
         for (const lane of ["L", "M", "R"]) {
           laneButtons[lane].setAttribute(
             "data-active",
-            lane === state.shipLane ? "true" : "false",
+            // Only the Ship's button reflects the ship's lane — the Beacon's
+            // buttons are signals, not steering, so they should not light
+            // up just because the ship happens to be in that lane.
+            role === "B" && lane === state.shipLane ? "true" : "false",
           );
         }
       };
@@ -839,18 +961,37 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
           pips[i].classList.toggle("taken", i < state.hits);
         }
         if (state.hits > lastHits) {
-          // Visible feedback on hit.
+          // Visible feedback on hit. The Beacon's view has no ship marker
+          // (the ship is just a small tag under the map), so the marker
+          // flash only runs on the Ship side.
           seaEl.classList.remove("flash-hit");
           void seaEl.offsetWidth; // restart animation
           seaEl.classList.add("flash-hit");
           for (const lane of ["L", "M", "R"]) {
             const marker = markerEls[lane];
+            if (!marker) {
+              continue;
+            }
             marker.classList.remove("flash-hit");
             void marker.offsetWidth;
             marker.classList.add("flash-hit");
           }
         }
         lastHits = state.hits;
+      };
+
+      let roleBannerHideTimeout = null;
+      const showRoleBanner = () => {
+        if (!roleBannerEl) {
+          return;
+        }
+        roleBannerEl.classList.add("visible");
+        if (roleBannerHideTimeout !== null) {
+          clearTimeout(roleBannerHideTimeout);
+        }
+        roleBannerHideTimeout = setTimeout(() => {
+          roleBannerEl.classList.remove("visible");
+        }, 3500);
       };
 
       const renderCueBanner = (state) => {
@@ -876,8 +1017,11 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         }
       };
 
-      // Ship's lane buttons act as steering. Beacon's lane buttons send
-      // cues. Same UI shape on both sides keeps the layout simple.
+      // Ship's lane buttons act as steering ("L"/"M"/"R", move into that
+      // lane). Beacon's lane buttons act as directional signals ("← Left",
+      // "↑ Ahead", "Right →"), labelled differently in the DOM so the
+      // Beacon does not mistake their console for the steering side. Same
+      // underlying lane payload either way; the DO routes by slot.
       const sendInput = (lane) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) {
           return;
@@ -980,6 +1124,11 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
           if (prevPhase !== "round") {
             lastHits = 0;
             lastCueAt = 0;
+            // Show the role banner only at round start (or on a fresh
+            // entry to the round phase from elsewhere) — auto-fades after
+            // a few seconds. A reload mid-round skips this because
+            // prevPhase === "round" already.
+            showRoleBanner();
           }
           showOnly("round");
           renderShipMarker(msg);
