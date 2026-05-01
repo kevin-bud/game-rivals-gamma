@@ -1,8 +1,8 @@
 // BEACON — co-op asymmetric room. The Beacon (slot A) sees the sea and
 // flashes signals; the Ship (slot B) sails blind through fog. This file
-// wires the *handshake into a game*: role-named welcome, ready-up,
-// synced 3-2-1 countdown, and a placeholder round screen. The mechanic
-// itself is the next slice.
+// owns the full round: handshake, ready-up, synced 3-2-1 countdown, the
+// playable lane-and-gate round, end-of-round screen, and "Another go"
+// rematch.
 
 export type Env = {
   ROOM: DurableObjectNamespace;
@@ -16,6 +16,46 @@ const ROOM_CODE_LENGTH = 5;
 // a slow socket to deliver the message and the client to render "3" before
 // it ticks to "2".
 const COUNTDOWN_BUFFER_MS = 3500;
+
+// Round tuning. 18 gates × ~1.7s = ~30s. Tweak here.
+const GATE_COUNT = 18;
+const DEFAULT_GATE_INTERVAL_MS = 1700;
+// Lead-in before the first gate arrives — gives the ship a chance to
+// orient on the first cue without an instant hit.
+const ROUND_LEAD_IN_MS = 2000;
+const HIT_LIMIT = 3;
+
+// Test hook: WS URL accepts ?test_seed=<n> to force the gate seed and
+// ?test_tempo=<ms> to accelerate the gate interval. These exist purely to
+// make the e2e spec deterministic and fast — the client never sets them
+// in production. The `?role=` parameter is the only thing real clients pass.
+const MIN_TEST_TEMPO_MS = 200;
+
+type Lane = "L" | "M" | "R";
+type Slot = "A" | "B";
+type Phase = "welcome" | "countdown" | "round" | "result";
+type Result = "playing" | "won" | "lost";
+
+type Gate = {
+  lane: Lane;
+  arrivesAt: number;
+};
+
+type Cue = {
+  direction: Lane;
+  sentAt: number;
+};
+
+type SlotState = {
+  connected: boolean;
+  ready: boolean;
+  playAgain: boolean;
+};
+
+type SocketRecord = {
+  socket: WebSocket;
+  slot: Slot;
+};
 
 const generateRoomCode = (): string => {
   const bytes = new Uint8Array(ROOM_CODE_LENGTH);
@@ -244,8 +284,193 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         opacity: 0.85;
       }
 
-      /* Round screen (placeholder) */
+      /* Round + result screens — full-bleed sea. */
       .round-screen {
+        position: fixed;
+        inset: 0;
+        background: #0b1626;
+        color: white;
+        display: flex;
+        flex-direction: column;
+        z-index: 10;
+        overflow: hidden;
+      }
+
+      /* Top HUD bar with hits + role tag. */
+      .hud {
+        flex-shrink: 0;
+        padding: 0.75rem 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        background: rgba(255,255,255,0.05);
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+      }
+      .hud .role-tag {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        opacity: 0.7;
+      }
+      .hits {
+        display: flex;
+        gap: 0.4rem;
+      }
+      .hit-pip {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        border: 1.5px solid rgba(255,255,255,0.5);
+      }
+      .hit-pip.taken {
+        background: #cc3333;
+        border-color: #cc3333;
+      }
+
+      /* Sea panel — the scrolling lane area. */
+      .sea {
+        flex: 1 1 auto;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(#0b1626 0%, #122440 100%);
+      }
+      .sea.flash-hit {
+        animation: flashHit 350ms ease-out;
+      }
+      @keyframes flashHit {
+        0% { background: #cc3333; }
+        100% { background: linear-gradient(#0b1626 0%, #122440 100%); }
+      }
+      .lane-divider {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: rgba(255,255,255,0.12);
+      }
+      .lane-divider.one { left: 33.333%; }
+      .lane-divider.two { left: 66.666%; }
+
+      /* Beacon view: full vertical map of gates scrolling top → bottom. */
+      .beacon-gate {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 1.2rem;
+        display: flex;
+        pointer-events: none;
+      }
+      .beacon-gate .lane-cell {
+        flex: 1 1 0;
+        border-top: 4px solid #cc4444;
+        border-bottom: 4px solid #cc4444;
+        background: rgba(204,68,68,0.25);
+      }
+      .beacon-gate .lane-cell.open {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      /* Ship view: only the next gate or two are visible. */
+      .ship-gate {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2.4rem;
+        display: flex;
+        pointer-events: none;
+      }
+      .ship-gate .lane-cell {
+        flex: 1 1 0;
+        border-top: 6px solid #ee5050;
+        border-bottom: 6px solid #ee5050;
+        background: rgba(238,80,80,0.35);
+      }
+      .ship-gate .lane-cell.open {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      /* The ship marker — a triangle at the bottom in the current lane. */
+      .ship-row {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 4rem;
+        display: flex;
+        border-top: 1px solid rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.04);
+      }
+      .ship-row .lane-slot {
+        flex: 1 1 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ship-marker {
+        width: 0;
+        height: 0;
+        border-left: 1.1rem solid transparent;
+        border-right: 1.1rem solid transparent;
+        border-bottom: 1.7rem solid #ffe066;
+        transition: transform 120ms ease-out;
+      }
+      .ship-marker.flash-hit {
+        animation: shipFlashHit 350ms ease-out;
+      }
+      @keyframes shipFlashHit {
+        0% { border-bottom-color: #ff4444; transform: scale(1.2); }
+        100% { border-bottom-color: #ffe066; transform: scale(1); }
+      }
+
+      /* Beacon's cue arrow on Ship's top of sea. */
+      .cue-banner {
+        position: absolute;
+        top: 0.5rem;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 4rem;
+        line-height: 1;
+        font-weight: 800;
+        color: #ffe066;
+        text-shadow: 0 0 12px rgba(255,224,102,0.6);
+        opacity: 0;
+        transition: opacity 200ms ease-out;
+        pointer-events: none;
+      }
+      .cue-banner.visible { opacity: 1; }
+
+      /* Bottom controls bar — three big lane buttons. */
+      .controls {
+        flex-shrink: 0;
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.5rem;
+        background: rgba(0,0,0,0.4);
+        border-top: 1px solid rgba(255,255,255,0.1);
+      }
+      .controls button {
+        flex: 1 1 0;
+        font-size: 1.4rem;
+        font-weight: 800;
+        padding: 0.9rem 0;
+        border: 0;
+        border-radius: 0.6rem;
+        background: #233a5c;
+        color: white;
+        cursor: pointer;
+        min-height: 3.2rem;
+      }
+      .controls button[data-active="true"] {
+        background: #2266ee;
+        outline: 2px solid #ffe066;
+      }
+
+      /* End-of-round screen. */
+      .result-screen {
         position: fixed;
         inset: 0;
         background: #0b1626;
@@ -254,23 +479,52 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 1.5rem;
+        padding: 2rem 1.5rem;
         gap: 1.25rem;
-        z-index: 10;
+        z-index: 11;
         text-align: center;
       }
-      .round-screen h2 {
+      .result-screen .verdict {
+        font-size: 3.4rem;
+        font-weight: 800;
         margin: 0;
-        font-size: 1.8rem;
+        letter-spacing: 0.02em;
+      }
+      .result-screen .verdict.won { color: #6ee27a; }
+      .result-screen .verdict.lost { color: #ee6666; }
+      .result-screen .subtitle {
+        font-size: 1.15rem;
+        opacity: 0.85;
+        margin: 0;
+        line-height: 1.4;
+        max-width: 22rem;
+      }
+      .result-screen .partner-note {
+        font-size: 0.95rem;
+        opacity: 0.7;
+        margin-top: 0.25rem;
+        min-height: 1.4em;
+      }
+      .result-screen .again-btn {
+        font-size: 1.2rem;
+        padding: 1rem 2rem;
+        border-radius: 0.6rem;
+        border: 0;
+        background: #2266ee;
+        color: white;
         font-weight: 700;
+        cursor: pointer;
+        min-height: 3.2rem;
+        min-width: 12rem;
       }
-      .round-screen .room-tag {
-        font-size: 0.85rem;
-        opacity: 0.65;
-        letter-spacing: 0.15em;
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      .result-screen .again-btn[disabled] {
+        background: #555;
+        cursor: default;
+        opacity: 0.85;
       }
-      .round-screen a { color: #9bd0ff; }
+      .result-screen .leave-link {
+        color: #9bd0ff;
+      }
 
       .hidden { display: none !important; }
     </style>
@@ -313,37 +567,92 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
     </div>
 
     <div id="round-view" class="round-screen hidden" data-testid="round-view">
-      <h2 data-testid="round-title">${role === "A" ? "Beacon view — coming next." : "Ship view — coming next."}</h2>
-      <div class="room-tag">Room <span data-testid="round-room-code">${code}</span></div>
-      <p><a href="/" data-testid="round-leave-link">Leave</a></p>
+      <div class="hud">
+        <div class="role-tag" data-testid="round-role-tag">${role === "A" ? "Beacon" : "Ship"} · room ${code}</div>
+        <div class="hits" data-testid="hits" id="hits">
+          <span class="hit-pip" data-pip="0"></span>
+          <span class="hit-pip" data-pip="1"></span>
+          <span class="hit-pip" data-pip="2"></span>
+        </div>
+      </div>
+      <div class="sea" id="sea" data-testid="sea">
+        <div class="lane-divider one"></div>
+        <div class="lane-divider two"></div>
+        <div class="cue-banner" id="cue-banner" data-testid="cue-banner"></div>
+        <div id="gates-layer"></div>
+        <div class="ship-row">
+          <div class="lane-slot"><div class="ship-marker" data-lane-marker="L" id="marker-L"></div></div>
+          <div class="lane-slot"><div class="ship-marker" data-lane-marker="M" id="marker-M"></div></div>
+          <div class="lane-slot"><div class="ship-marker" data-lane-marker="R" id="marker-R"></div></div>
+        </div>
+      </div>
+      <div class="controls" data-testid="controls">
+        <button type="button" data-lane="L" data-testid="lane-L" onclick="sendInput('L')">L</button>
+        <button type="button" data-lane="M" data-testid="lane-M" onclick="sendInput('M')">M</button>
+        <button type="button" data-lane="R" data-testid="lane-R" onclick="sendInput('R')">R</button>
+      </div>
+    </div>
+
+    <div id="result-view" class="result-screen hidden" data-testid="result-view">
+      <h2 class="verdict" data-testid="result-verdict" id="verdict">Saved.</h2>
+      <p class="subtitle" data-testid="result-subtitle" id="subtitle"></p>
+      <p class="partner-note" data-testid="partner-note" id="partner-note"></p>
+      <button type="button" class="again-btn" id="again-btn" data-testid="again-button" onclick="sendPlayAgain()">Another go</button>
+      <p><a class="leave-link" href="/" data-testid="result-leave-link">Leave</a></p>
     </div>
 
     <script>
       const code = ${JSON.stringify(code)};
       const role = ${JSON.stringify(role)};
       const otherRole = role === "A" ? "B" : "A";
-      const selfName = role === "A" ? "Beacon" : "Ship";
       const otherName = role === "A" ? "Ship" : "Beacon";
 
       const welcomeView = document.getElementById("welcome-view");
       const countdownView = document.getElementById("countdown-view");
       const countdownNumberEl = countdownView.querySelector("[data-testid='countdown-number']");
       const roundView = document.getElementById("round-view");
+      const resultView = document.getElementById("result-view");
       const presenceEl = document.getElementById("presence");
       const dotEl = document.getElementById("dot");
       const readyBtn = document.getElementById("ready-btn");
+      const seaEl = document.getElementById("sea");
+      const cueBannerEl = document.getElementById("cue-banner");
+      const gatesLayerEl = document.getElementById("gates-layer");
+      const hitsEl = document.getElementById("hits");
+      const verdictEl = document.getElementById("verdict");
+      const subtitleEl = document.getElementById("subtitle");
+      const partnerNoteEl = document.getElementById("partner-note");
+      const againBtn = document.getElementById("again-btn");
+      const markerEls = {
+        L: document.getElementById("marker-L"),
+        M: document.getElementById("marker-M"),
+        R: document.getElementById("marker-R"),
+      };
+      const laneButtons = {
+        L: document.querySelector("[data-lane='L']"),
+        M: document.querySelector("[data-lane='M']"),
+        R: document.querySelector("[data-lane='R']"),
+      };
 
       let ws;
       let backoff = 500;
       let countdownRafId = null;
       let countdownStartsAt = null;
-      // Mirror of the latest server state, used to render the welcome card.
+      let renderRafId = null;
+      // Mirror of the latest server state.
       let lastState = null;
+      // Track the most recent hits count so we can flash on increase.
+      let lastHits = 0;
+      // Track the most recent cue we rendered so the banner only re-shows
+      // for genuinely new cues.
+      let lastCueAt = 0;
+      let cueHideTimeout = null;
 
       const showOnly = (which) => {
         welcomeView.classList.toggle("hidden", which !== "welcome");
         countdownView.classList.toggle("hidden", which !== "countdown");
         roundView.classList.toggle("hidden", which !== "round");
+        resultView.classList.toggle("hidden", which !== "result");
       };
 
       const setPresence = (state, text) => {
@@ -359,7 +668,6 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         const other = lastState[otherRole.toLowerCase()];
         const selfState = lastState[role.toLowerCase()];
 
-        // Other-side presence text.
         if (!other.connected) {
           setPresence("waiting", "Waiting for the " + otherName + " to join…");
         } else if (other.ready) {
@@ -368,7 +676,6 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
           setPresence("connected", "Waiting for the " + otherName + " to be ready.");
         }
 
-        // Ready button state.
         if (selfState.ready) {
           readyBtn.disabled = true;
           readyBtn.textContent = "Waiting…";
@@ -395,13 +702,9 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         const remainingMs = countdownStartsAt - Date.now();
         if (remainingMs <= 0) {
           countdownNumberEl.textContent = "0";
-          // Round transition is driven by the server's "round" state, not by
-          // a client-side timeout — so just hold on 0 until the server
-          // broadcasts the phase change.
           countdownRafId = requestAnimationFrame(tickCountdown);
           return;
         }
-        // 3500ms remaining → "3", 2500..1500 → "2", etc.
         const seconds = Math.ceil(remainingMs / 1000);
         const display = String(Math.min(seconds, 3));
         if (countdownNumberEl.textContent !== display) {
@@ -418,18 +721,254 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         countdownRafId = requestAnimationFrame(tickCountdown);
       };
 
+      const cancelRoundLoop = () => {
+        if (renderRafId !== null) {
+          cancelAnimationFrame(renderRafId);
+          renderRafId = null;
+        }
+      };
+
+      // Render the gates layer. Beacon sees the whole sequence as a vertical
+      // map; Ship sees only the next gate(s). Ship's view is also faster
+      // moving (gates compress closer together) for legibility.
+      const renderGates = (state, now) => {
+        const gates = state.gates;
+        if (!gates || gates.length === 0) {
+          gatesLayerEl.innerHTML = "";
+          return;
+        }
+        const seaH = seaEl.clientHeight;
+        if (seaH === 0) {
+          return;
+        }
+
+        // The "ship row" is anchored to the bottom of the sea. Gates that
+        // arrive at the ship line up with that row's top edge.
+        const shipRowTop = seaH - 64; // matches .ship-row height (4rem ≈ 64px)
+        gatesLayerEl.innerHTML = "";
+
+        if (role === "A") {
+          // Beacon: project the entire round across the available height.
+          // The gate scheduled latest sits at y=0 (top), the gate due now
+          // sits at y=shipRowTop. We use roundStartedAt as the timeline
+          // anchor so reload reproduces the same on-screen positions.
+          const last = gates[gates.length - 1];
+          const totalSpanMs = last.arrivesAt - state.roundStartedAt;
+          if (totalSpanMs <= 0) {
+            return;
+          }
+          const pxPerMs = shipRowTop / totalSpanMs;
+          for (const gate of gates) {
+            const dueIn = gate.arrivesAt - now;
+            // Gate position: gates due now are at shipRowTop; gates due
+            // later are above (smaller y).
+            const y = shipRowTop - dueIn * pxPerMs;
+            if (y < -20 || y > shipRowTop + 4) {
+              continue;
+            }
+            gatesLayerEl.appendChild(buildGateEl(gate, y, false));
+          }
+        } else {
+          // Ship: only render the next two gates. We compress 1.7 seconds
+          // of approach into the full sea height so the next gate is clearly
+          // visible from a long way off.
+          const visibleMs = state.gateInterval * 2;
+          for (let i = 0; i < gates.length; i += 1) {
+            const gate = gates[i];
+            const dueIn = gate.arrivesAt - now;
+            if (dueIn < -200 || dueIn > visibleMs) {
+              continue;
+            }
+            const fraction = dueIn / visibleMs; // 1 = far, 0 = at ship
+            const y = shipRowTop - fraction * shipRowTop;
+            gatesLayerEl.appendChild(buildGateEl(gate, y, true));
+          }
+        }
+      };
+
+      const buildGateEl = (gate, y, ship) => {
+        const el = document.createElement("div");
+        el.className = ship ? "ship-gate" : "beacon-gate";
+        el.style.top = (y - (ship ? 12 : 6)) + "px";
+        el.dataset.gateLane = gate.lane;
+        const lanes = ["L", "M", "R"];
+        for (const lane of lanes) {
+          const cell = document.createElement("div");
+          cell.className = "lane-cell" + (lane === gate.lane ? " open" : "");
+          el.appendChild(cell);
+        }
+        return el;
+      };
+
+      const renderShipMarker = (state) => {
+        for (const lane of ["L", "M", "R"]) {
+          const marker = markerEls[lane];
+          marker.style.display = lane === state.shipLane ? "block" : "none";
+        }
+        for (const lane of ["L", "M", "R"]) {
+          laneButtons[lane].setAttribute(
+            "data-active",
+            lane === state.shipLane ? "true" : "false",
+          );
+        }
+      };
+
+      const renderHits = (state) => {
+        const pips = hitsEl.querySelectorAll(".hit-pip");
+        for (let i = 0; i < pips.length; i += 1) {
+          pips[i].classList.toggle("taken", i < state.hits);
+        }
+        if (state.hits > lastHits) {
+          // Visible feedback on hit.
+          seaEl.classList.remove("flash-hit");
+          void seaEl.offsetWidth; // restart animation
+          seaEl.classList.add("flash-hit");
+          for (const lane of ["L", "M", "R"]) {
+            const marker = markerEls[lane];
+            marker.classList.remove("flash-hit");
+            void marker.offsetWidth;
+            marker.classList.add("flash-hit");
+          }
+        }
+        lastHits = state.hits;
+      };
+
+      const renderCueBanner = (state) => {
+        if (role !== "B") {
+          return;
+        }
+        if (!state.latestCue) {
+          cueBannerEl.classList.remove("visible");
+          cueBannerEl.textContent = "";
+          return;
+        }
+        const arrowFor = (dir) => dir === "L" ? "←" : dir === "R" ? "→" : "↑";
+        if (state.latestCue.sentAt !== lastCueAt) {
+          lastCueAt = state.latestCue.sentAt;
+          cueBannerEl.textContent = arrowFor(state.latestCue.direction);
+          cueBannerEl.classList.add("visible");
+          if (cueHideTimeout !== null) {
+            clearTimeout(cueHideTimeout);
+          }
+          cueHideTimeout = setTimeout(() => {
+            cueBannerEl.classList.remove("visible");
+          }, 1500);
+        }
+      };
+
+      // Ship's lane buttons act as steering. Beacon's lane buttons send
+      // cues. Same UI shape on both sides keeps the layout simple.
+      const sendInput = (lane) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        try {
+          if (role === "A") {
+            ws.send(JSON.stringify({ type: "cue", direction: lane }));
+          } else {
+            ws.send(JSON.stringify({ type: "lane", lane: lane }));
+          }
+        } catch (e) {
+          // ignore — close handler will retry the connection.
+        }
+      };
+      window.sendInput = sendInput;
+
+      const sendPlayAgain = () => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+        try {
+          ws.send(JSON.stringify({ type: "play-again" }));
+        } catch (e) {
+          // ignore
+        }
+      };
+      window.sendPlayAgain = sendPlayAgain;
+
+      const renderRoundFrame = () => {
+        if (!lastState || (lastState.phase !== "round" && lastState.phase !== "result")) {
+          renderRafId = null;
+          return;
+        }
+        const now = Date.now();
+        renderGates(lastState, now);
+        renderRafId = requestAnimationFrame(renderRoundFrame);
+      };
+
+      const startRoundLoop = () => {
+        cancelRoundLoop();
+        renderRafId = requestAnimationFrame(renderRoundFrame);
+      };
+
+      const renderResult = (state) => {
+        const won = state.result === "won";
+        verdictEl.textContent = won ? "Saved." : "Wrecked.";
+        verdictEl.classList.toggle("won", won);
+        verdictEl.classList.toggle("lost", !won);
+        if (role === "A") {
+          subtitleEl.textContent = won
+            ? "You guided them home."
+            : "They went down on your watch.";
+        } else {
+          subtitleEl.textContent = won
+            ? "You made it."
+            : "You hit one rock too many.";
+        }
+        const selfState = state[role.toLowerCase()];
+        const otherState = state[otherRole.toLowerCase()];
+        if (selfState.playAgain) {
+          againBtn.disabled = true;
+          againBtn.textContent = "Waiting…";
+        } else {
+          againBtn.disabled = false;
+          againBtn.textContent = "Another go";
+        }
+        if (otherState.playAgain && !selfState.playAgain) {
+          partnerNoteEl.textContent = "The " + otherName + " wants another go.";
+        } else if (otherState.playAgain && selfState.playAgain) {
+          partnerNoteEl.textContent = "Starting the next round…";
+        } else {
+          partnerNoteEl.textContent = "";
+        }
+      };
+
       const handleStateMessage = (msg) => {
-        lastState = { a: msg.a, b: msg.b };
+        const prevPhase = lastState ? lastState.phase : null;
+        lastState = msg;
         if (msg.phase === "welcome") {
           cancelCountdown();
+          cancelRoundLoop();
+          lastHits = 0;
+          lastCueAt = 0;
           showOnly("welcome");
           renderWelcome();
         } else if (msg.phase === "countdown") {
+          cancelRoundLoop();
+          lastHits = 0;
+          lastCueAt = 0;
           renderWelcome();
           startCountdown(msg.countdownStartsAt);
         } else if (msg.phase === "round") {
           cancelCountdown();
+          if (prevPhase !== "round") {
+            lastHits = 0;
+            lastCueAt = 0;
+          }
           showOnly("round");
+          renderShipMarker(msg);
+          renderHits(msg);
+          renderCueBanner(msg);
+          startRoundLoop();
+        } else if (msg.phase === "result") {
+          cancelCountdown();
+          // Keep the round loop alive briefly so the final hit registers
+          // visually before the result screen takes over.
+          cancelRoundLoop();
+          renderShipMarker(msg);
+          renderHits(msg);
+          showOnly("result");
+          renderResult(msg);
         }
       };
 
@@ -440,7 +979,7 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         try {
           ws.send(JSON.stringify({ type: "ready" }));
         } catch (e) {
-          // ignore — close handler will retry the connection.
+          // ignore
         }
       };
       window.sendReady = sendReady;
@@ -452,8 +991,22 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
       };
       window.copyCode = copyCode;
 
+      // Test hooks: forward ?test_seed= and ?test_tempo= to the WS so the
+      // e2e spec can pin a deterministic gate sequence and accelerated
+      // tempo. Real clients never set these.
+      const pageParams = new URLSearchParams(location.search);
+      const wsParams = new URLSearchParams();
+      wsParams.set("role", role);
+      const seed = pageParams.get("test_seed");
+      const tempo = pageParams.get("test_tempo");
+      if (seed) {
+        wsParams.set("test_seed", seed);
+      }
+      if (tempo) {
+        wsParams.set("test_tempo", tempo);
+      }
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const url = proto + "//" + location.host + "/r/" + code + "/ws?role=" + role;
+      const url = proto + "//" + location.host + "/r/" + code + "/ws?" + wsParams.toString();
 
       const connect = () => {
         ws = new WebSocket(url);
@@ -467,14 +1020,14 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
             handleStateMessage(msg);
           } else if (msg.type === "rejected") {
             cancelCountdown();
+            cancelRoundLoop();
             showOnly("welcome");
             setPresence("closed", msg.reason || "rejected");
           }
         });
         ws.addEventListener("close", () => {
-          // The server is the source of truth — fall back to "welcome" with
-          // a disconnected indicator until we reconnect and get fresh state.
           cancelCountdown();
+          cancelRoundLoop();
           showOnly("welcome");
           setPresence("disconnected", "Disconnected — retrying…");
           setTimeout(connect, backoff);
@@ -517,8 +1070,6 @@ export default {
       const code = generateRoomCode();
       const id = env.ROOM.idFromName(code);
       const stub = env.ROOM.get(id);
-      // Ensure the DO knows its code (best-effort init); the room is only
-      // truly created on first WS connect, but POSTing here also reserves it.
       await stub.fetch(new Request("https://room/init", { method: "POST" }));
       return new Response(null, {
         status: 303,
@@ -533,7 +1084,6 @@ export default {
       if (!isValidCode(code)) {
         return htmlResponse(errorPage(INVALID_CODE_MESSAGE), 400);
       }
-      // Check the room exists and isn't full before redirecting.
       const id = env.ROOM.idFromName(code);
       const stub = env.ROOM.get(id);
       const probe = await stub.fetch(new Request("https://room/probe"));
@@ -550,7 +1100,6 @@ export default {
       });
     }
 
-    // /r/<code>/ws — websocket endpoint
     const wsMatch = pathname.match(/^\/r\/([A-Z0-9]{4,6})\/ws$/);
     if (wsMatch) {
       const code = wsMatch[1];
@@ -562,7 +1111,6 @@ export default {
       return stub.fetch(request);
     }
 
-    // /r/<code> — room page
     const roomMatch = pathname.match(/^\/r\/([A-Z0-9]{4,6})\/?$/);
     if (roomMatch && request.method === "GET") {
       const code = roomMatch[1];
@@ -577,17 +1125,54 @@ export default {
   },
 } satisfies ExportedHandler<Env>;
 
-type Slot = "A" | "B";
-type Phase = "welcome" | "countdown" | "round";
-
-type SocketRecord = {
-  socket: WebSocket;
-  slot: Slot;
+// Tiny xorshift32 PRNG. Six lines, no dep. Deterministic given the seed —
+// used so a mid-round reload reproduces the same gate sequence.
+const makeRng = (seed: number): (() => number) => {
+  let state = seed >>> 0;
+  if (state === 0) {
+    state = 0x9e3779b1;
+  }
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 0xffffffff;
+  };
 };
 
-type SlotState = {
-  connected: boolean;
-  ready: boolean;
+const hashCode = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h >>> 0;
+};
+
+const generateGates = (
+  seed: number,
+  startAt: number,
+  intervalMs: number,
+  count: number,
+): Gate[] => {
+  const rng = makeRng(seed);
+  const lanes: Lane[] = ["L", "M", "R"];
+  const gates: Gate[] = [];
+  let prev: Lane | null = null;
+  for (let i = 0; i < count; i += 1) {
+    let lane: Lane = lanes[Math.floor(rng() * 3)];
+    // Bias against repeats: if same as previous, re-roll once.
+    if (prev !== null && lane === prev) {
+      lane = lanes[Math.floor(rng() * 3)];
+    }
+    prev = lane;
+    gates.push({
+      lane,
+      arrivesAt: startAt + ROUND_LEAD_IN_MS + i * intervalMs,
+    });
+  }
+  return gates;
 };
 
 export class Room implements DurableObject {
@@ -595,11 +1180,23 @@ export class Room implements DurableObject {
   private sockets: Set<SocketRecord> = new Set();
   private exists = false;
   private ready: Record<Slot, boolean> = { A: false, B: false };
+  private playAgain: Record<Slot, boolean> = { A: false, B: false };
   private phase: Phase = "welcome";
-  // Server-issued unix-ms at which both clients should display "0".
   private countdownStartsAt: number | null = null;
-  // Alarm token so a reschedule cancels in-flight transitions.
   private roundTransitionAt: number | null = null;
+  // Round state. Reset between rounds.
+  private gates: Gate[] = [];
+  private gateInterval = DEFAULT_GATE_INTERVAL_MS;
+  private nextGateIndex = 0;
+  private shipLane: Lane = "M";
+  private hits = 0;
+  private latestCue: Cue | null = null;
+  private result: Result = "playing";
+  private roundStartedAt: number | null = null;
+  // Pinned by the most recent `?test_seed=` from any connecting socket.
+  // The next round's gate sequence will use this seed if set, then clear.
+  private pendingTestSeed: number | null = null;
+  private pendingTestTempo: number | null = null;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -623,7 +1220,6 @@ export class Room implements DurableObject {
       );
     }
 
-    // Anything else with an Upgrade header is treated as a WS connect.
     if (request.headers.get("Upgrade") !== "websocket") {
       return new Response("expected websocket", { status: 400 });
     }
@@ -632,6 +1228,22 @@ export class Room implements DurableObject {
     const requestedRole: Slot | null =
       requestedRoleRaw === "A" || requestedRoleRaw === "B" ? requestedRoleRaw : null;
 
+    // Test hooks. See top of file for context.
+    const seedRaw = url.searchParams.get("test_seed");
+    if (seedRaw !== null) {
+      const parsed = Number.parseInt(seedRaw, 10);
+      if (Number.isFinite(parsed)) {
+        this.pendingTestSeed = parsed >>> 0;
+      }
+    }
+    const tempoRaw = url.searchParams.get("test_tempo");
+    if (tempoRaw !== null) {
+      const parsed = Number.parseInt(tempoRaw, 10);
+      if (Number.isFinite(parsed) && parsed >= MIN_TEST_TEMPO_MS) {
+        this.pendingTestTempo = parsed;
+      }
+    }
+
     const slot = this.assignSlot(requestedRole);
 
     const pair = new WebSocketPair();
@@ -639,7 +1251,6 @@ export class Room implements DurableObject {
     const server = pair[1];
 
     if (slot === null) {
-      // Reject: room is full. Accept the socket only to send a clean message.
       server.accept();
       try {
         server.send(JSON.stringify({ type: "rejected", reason: FULL_ROOM_MESSAGE }));
@@ -653,8 +1264,6 @@ export class Room implements DurableObject {
     this.exists = true;
     server.accept();
 
-    // If a previous socket for this slot is still in our set (e.g. the page
-    // reloaded before the close event landed), drop it.
     for (const existing of [...this.sockets]) {
       if (existing.slot === slot) {
         try {
@@ -706,33 +1315,128 @@ export class Room implements DurableObject {
         this.handleReady(slot);
         return;
       }
+      if (type === "lane") {
+        const lane = (parsed as { lane?: string }).lane;
+        if (lane === "L" || lane === "M" || lane === "R") {
+          this.handleLane(slot, lane);
+        }
+        return;
+      }
+      if (type === "cue") {
+        const direction = (parsed as { direction?: string }).direction;
+        if (direction === "L" || direction === "M" || direction === "R") {
+          this.handleCue(slot, direction);
+        }
+        return;
+      }
+      if (type === "play-again") {
+        this.handlePlayAgain(slot);
+        return;
+      }
     });
 
-    // Send initial state to the new socket and notify the peer.
     this.broadcastState();
 
     return new Response(null, { status: 101, webSocket: client });
   }
 
   async alarm(): Promise<void> {
-    // The countdown alarm fires once countdownStartsAt is reached. Promote
-    // the room to the round phase if we're still in countdown.
     const now = Date.now();
+    // Countdown → round transition.
     if (
       this.phase === "countdown" &&
       this.roundTransitionAt !== null &&
       now + 50 >= this.roundTransitionAt
     ) {
-      this.phase = "round";
-      this.countdownStartsAt = null;
-      this.roundTransitionAt = null;
+      this.startRound();
+      this.scheduleNextGateAlarm();
+      return;
+    }
+    // Round → evaluate gates that have arrived.
+    if (this.phase === "round") {
+      this.evaluateDueGates(now);
+      if (this.phase === "round") {
+        this.scheduleNextGateAlarm();
+      }
+    }
+  }
+
+  private startRound(): void {
+    const now = Date.now();
+    const seed =
+      this.pendingTestSeed !== null
+        ? this.pendingTestSeed
+        : (Date.now() ^ hashCode(this.state.id.toString())) >>> 0;
+    this.gateInterval =
+      this.pendingTestTempo !== null ? this.pendingTestTempo : DEFAULT_GATE_INTERVAL_MS;
+    // Clear the pending test hooks so a subsequent rematch falls back to
+    // production defaults unless the client re-sends them on reconnect.
+    this.pendingTestSeed = null;
+    this.pendingTestTempo = null;
+
+    this.gates = generateGates(seed, now, this.gateInterval, GATE_COUNT);
+    this.nextGateIndex = 0;
+    this.shipLane = "M";
+    this.hits = 0;
+    this.latestCue = null;
+    this.result = "playing";
+    this.roundStartedAt = now;
+    this.phase = "round";
+    this.countdownStartsAt = null;
+    this.roundTransitionAt = null;
+    this.broadcastState();
+  }
+
+  private scheduleNextGateAlarm(): void {
+    if (this.phase !== "round") {
+      return;
+    }
+    if (this.nextGateIndex >= this.gates.length) {
+      // No gates left to evaluate — finish the round.
+      this.finishRound("won");
+      return;
+    }
+    const next = this.gates[this.nextGateIndex];
+    this.state.storage.setAlarm(next.arrivesAt).catch(() => {
+      // ignore
+    });
+  }
+
+  private evaluateDueGates(now: number): void {
+    while (
+      this.phase === "round" &&
+      this.nextGateIndex < this.gates.length &&
+      this.gates[this.nextGateIndex].arrivesAt <= now + 50
+    ) {
+      const gate = this.gates[this.nextGateIndex];
+      this.nextGateIndex += 1;
+      if (this.shipLane !== gate.lane) {
+        this.hits += 1;
+        if (this.hits >= HIT_LIMIT) {
+          this.finishRound("lost");
+          return;
+        }
+      }
+      // Broadcast incrementally so clients see hits as they happen.
       this.broadcastState();
     }
+    if (this.nextGateIndex >= this.gates.length && this.phase === "round") {
+      this.finishRound("won");
+    }
+  }
+
+  private finishRound(verdict: Result): void {
+    this.result = verdict;
+    this.phase = "result";
+    this.playAgain = { A: false, B: false };
+    this.state.storage.deleteAlarm().catch(() => {
+      // ignore
+    });
+    this.broadcastState();
   }
 
   private handleReady(slot: Slot): void {
     if (this.phase !== "welcome") {
-      // Ignore late ready presses once the countdown or round has begun.
       return;
     }
     if (this.ready[slot]) {
@@ -740,23 +1444,73 @@ export class Room implements DurableObject {
     }
     this.ready[slot] = true;
     if (this.ready.A && this.ready.B && this.bothConnected()) {
-      this.phase = "countdown";
-      this.countdownStartsAt = Date.now() + COUNTDOWN_BUFFER_MS;
-      this.roundTransitionAt = this.countdownStartsAt;
-      // Schedule a transition to "round" at countdownStartsAt. Use a DO alarm
-      // so the transition fires even if no message arrives meanwhile.
-      this.state.storage.setAlarm(this.countdownStartsAt).catch(() => {
-        // ignore — broadcast still happens.
-      });
+      this.beginCountdown();
+    }
+    this.broadcastState();
+  }
+
+  private beginCountdown(): void {
+    this.phase = "countdown";
+    this.countdownStartsAt = Date.now() + COUNTDOWN_BUFFER_MS;
+    this.roundTransitionAt = this.countdownStartsAt;
+    this.state.storage.setAlarm(this.countdownStartsAt).catch(() => {
+      // ignore
+    });
+  }
+
+  private handleLane(slot: Slot, lane: Lane): void {
+    if (this.phase !== "round" || this.result !== "playing") {
+      return;
+    }
+    // Only the Ship can move. Beacon's lane buttons send cues instead.
+    if (slot !== "B") {
+      return;
+    }
+    if (this.shipLane === lane) {
+      return;
+    }
+    this.shipLane = lane;
+    this.broadcastState();
+  }
+
+  private handleCue(slot: Slot, direction: Lane): void {
+    if (this.phase !== "round" || this.result !== "playing") {
+      return;
+    }
+    if (slot !== "A") {
+      return;
+    }
+    this.latestCue = { direction, sentAt: Date.now() };
+    this.broadcastState();
+  }
+
+  private handlePlayAgain(slot: Slot): void {
+    if (this.phase !== "result") {
+      return;
+    }
+    if (this.playAgain[slot]) {
+      return;
+    }
+    this.playAgain[slot] = true;
+    if (this.playAgain.A && this.playAgain.B && this.bothConnected()) {
+      // Reset for a fresh handshake → countdown → round flow.
+      this.ready = { A: true, B: true };
+      this.playAgain = { A: false, B: false };
+      this.gates = [];
+      this.nextGateIndex = 0;
+      this.shipLane = "M";
+      this.hits = 0;
+      this.latestCue = null;
+      this.result = "playing";
+      this.roundStartedAt = null;
+      this.beginCountdown();
     }
     this.broadcastState();
   }
 
   private handleSlotDisconnect(slot: Slot): void {
-    // Any disconnect resets that slot's ready flag, cancels any in-flight
-    // countdown, and returns the room to welcome. The other side re-renders
-    // immediately based on the broadcast.
     this.ready[slot] = false;
+    this.playAgain[slot] = false;
     if (this.phase === "countdown") {
       this.phase = "welcome";
       this.countdownStartsAt = null;
@@ -764,19 +1518,27 @@ export class Room implements DurableObject {
       this.state.storage.deleteAlarm().catch(() => {
         // ignore
       });
-      // If the other side had also pressed ready, keep their flag — no, the
-      // task spec says reset on disconnect during countdown so both go back
-      // to welcome cleanly. Reset both.
-      this.ready.A = false;
-      this.ready.B = false;
+      this.ready = { A: false, B: false };
     }
     if (this.phase === "round") {
-      // If the round was in flight and a side drops, fall back to welcome so
-      // the remaining player can re-handshake when their partner returns.
+      // Mid-round disconnect: roll the room back to welcome so the survivor
+      // can re-handshake when the partner returns.
       this.phase = "welcome";
-      this.ready.A = false;
-      this.ready.B = false;
-      this.countdownStartsAt = null;
+      this.ready = { A: false, B: false };
+      this.gates = [];
+      this.nextGateIndex = 0;
+      this.shipLane = "M";
+      this.hits = 0;
+      this.latestCue = null;
+      this.result = "playing";
+      this.roundStartedAt = null;
+      this.state.storage.deleteAlarm().catch(() => {
+        // ignore
+      });
+    }
+    if (this.phase === "result") {
+      // Stay in result so the survivor still sees the verdict, but their
+      // partner-note will reflect the disconnected state.
     }
     this.broadcastState();
   }
@@ -807,7 +1569,6 @@ export class Room implements DurableObject {
       if (!this.isSlotTaken(requested)) {
         return requested;
       }
-      // Requested slot taken — try the other one before giving up.
       const other: Slot = requested === "A" ? "B" : "A";
       if (!this.isSlotTaken(other)) {
         return other;
@@ -827,6 +1588,7 @@ export class Room implements DurableObject {
     return {
       connected: this.isSlotTaken(slot),
       ready: this.ready[slot],
+      playAgain: this.playAgain[slot],
     };
   }
 
@@ -840,12 +1602,21 @@ export class Room implements DurableObject {
     if (this.phase === "countdown" && this.countdownStartsAt !== null) {
       payload.countdownStartsAt = this.countdownStartsAt;
     }
+    if (this.phase === "round" || this.phase === "result") {
+      payload.gates = this.gates;
+      payload.gateInterval = this.gateInterval;
+      payload.shipLane = this.shipLane;
+      payload.hits = this.hits;
+      payload.latestCue = this.latestCue;
+      payload.result = this.result;
+      payload.roundStartedAt = this.roundStartedAt;
+    }
     const serialised = JSON.stringify(payload);
     for (const rec of this.sockets) {
       try {
         rec.socket.send(serialised);
       } catch {
-        // ignore — close handler will clean up.
+        // ignore
       }
     }
   }
