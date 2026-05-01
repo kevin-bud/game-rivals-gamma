@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Fix the BEACON asymmetry. Real-user feedback shows the Ship can solo because they can see which lane is open, the Beacon's UI is functionally identical to the Ship's, and tapping correctly still wrecks. Make the Beacon's role load-bearing.
 **Assigned:** 2026-05-01 11:08 UTC (real wall clock)
-**Status:** assigned
+**Status:** in-progress
 
 **Why this — read carefully:** A real user just played the deployed game and reported back. Direct quote in the most recent decision-log entry ("Retracting 'MVP shipped': real-user feedback shows the asymmetry doesn't work"). Read that entry first; it has the diagnosis, the planned fix, and the time budget.
 

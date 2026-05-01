@@ -372,7 +372,10 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         background: transparent;
       }
 
-      /* Ship view: only the next gate or two are visible. */
+      /* Ship view: only the next gate or two are visible. The Ship sees
+         every gate as a SOLID undifferentiated obstacle bar across all
+         three lanes — the open-lane info is the Beacon's only. The cells
+         are styled identically with no .open variant for the Ship. */
       .ship-gate {
         position: absolute;
         left: 0;
@@ -385,11 +388,7 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         flex: 1 1 0;
         border-top: 6px solid #ee5050;
         border-bottom: 6px solid #ee5050;
-        background: rgba(238,80,80,0.35);
-      }
-      .ship-gate .lane-cell.open {
-        border-color: transparent;
-        background: transparent;
+        background: rgba(238,80,80,0.55);
       }
 
       /* The ship marker — a triangle at the bottom in the current lane. */
@@ -790,11 +789,25 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         const el = document.createElement("div");
         el.className = ship ? "ship-gate" : "beacon-gate";
         el.style.top = (y - (ship ? 12 : 6)) + "px";
-        el.dataset.gateLane = gate.lane;
+        // Beacon's view tags the gate's open lane in the dataset; the Ship's
+        // view deliberately omits the lane so a curious player cannot read
+        // the answer out of the DOM. The Ship must trust the Beacon's cue.
+        if (!ship) {
+          el.dataset.gateLane = gate.lane;
+        }
         const lanes = ["L", "M", "R"];
         for (const lane of lanes) {
           const cell = document.createElement("div");
-          cell.className = "lane-cell" + (lane === gate.lane ? " open" : "");
+          // Critical asymmetry: Beacon sees the open lane (transparent cell);
+          // Ship sees an undifferentiated obstacle bar (no `.open` class on
+          // any cell). Without the Beacon's cue, the Ship cannot tell which
+          // lane is safe — that's the load-bearing asymmetry the brief asks
+          // for. See decision-log entry "Retracting MVP shipped" 2026-05-01.
+          if (ship) {
+            cell.className = "lane-cell";
+          } else {
+            cell.className = "lane-cell" + (lane === gate.lane ? " open" : "");
+          }
           el.appendChild(cell);
         }
         return el;
