@@ -16,6 +16,36 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 11:56 UTC — Effective close-out: real MVP + seven posts + active idle to deadline
+
+**Context:** Real wall clock per `date -u` is `Fri 1 May 2026 11:56:16 UTC`. Deadline `2026-05-01T13:00:00+00:00`. **64 minutes margin.** All work-streams are idle: Engineer (after the asymmetry fix shipped + verified by a real-user-style Reviewer pass); Writer (after the "Two Beacons" follow-up went live).
+
+**End state delivered (verified, not narrative):**
+- **Product (live):** `https://game-rivals-gamma-product.kevin-wilson.workers.dev` — BEACON two-phone co-op with the asymmetry actually load-bearing. Ship can no longer read the open lane; Beacon UI is differentiated; lane evaluation accepts a 200ms latency grace. 28/28 specs (Engineer's 24 + Reviewer's 4 probes) green. Reviewer played the game as a real user and confirmed the asymmetry forces cooperation — a *gameplay* verification, not a flow verification. README at repo root describes the game.
+- **Blog (live):** `https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev` — seven posts in correct reverse-chronological order:
+  1. *Two Beacons* (11:55 GMT) — naming convergence with the rival.
+  2. *We got the asymmetry wrong* (11:48 GMT) — the post-mortem on the broken-MVP retraction and fix.
+  3. *What we cut and why* (10:52 GMT) — covers the "decisions evolved" criterion.
+  4. *The 20-second convergence* (10:30:30 GMT) — thesis convergence with the rival.
+  5. *BEACON: a co-op game for two strangers and one map* (10:30 GMT) — launch post.
+  6. *We shipped the pipe before the game* (09:54:40 GMT) — pre-game thinking.
+  7. *Project under way* (April 29) — welcome.
+- **Decision log:** this file. Eleven Orchestrator entries with rationale + reversibility, including the two process corrections (premature close-out misread, premature MVP claim).
+- **Rival state:** four checks logged with implications. Latest finding: two of three teams independently named the game *Beacon*, the third diverged on naming.
+
+**Choice:** Declare done. Engineer idle, Writer idle, Reviewer idle. Do **not** disable the idle hook this time — I want to remain responsive to any further user feedback or rival movement before 13:00 UTC. The previous freeze attempt happened on a misread of the clock; this one is honest. If 64 minutes pass without anything landing, the hackathon ends naturally.
+
+**What I would still do if the deadline moved out again:** nothing speculative. The product is fixed; the trail is documented; further posts would dilute. I would only act on a *new external signal* — user feedback, rival shipping something material, a real bug surfacing.
+
+**Process learnings carried forward:**
+1. *Anchor decisions to `date -u`, not narrative timestamps in this log.* I misread the clock by over an hour earlier; the entry "12:05 — Hackathon close-out" was written when real time was 10:48 UTC. Cost: a premature freeze that was reversed.
+2. *Spec-passing ≠ playable.* The previous Reviewer dispatches verified flow (transitions, hit-counter increments) and missed that the asymmetry was decorative. Cost: a "MVP shipped" claim that had to be retracted publicly when a real user played it. Future Reviewer dispatches should include explicit "play it as a real user" probes, not just e2e suites.
+3. *External feedback overrides internal verification.* When a real user said "the game doesn't work", that immediately took precedence over our six green specs. We retracted within the same conversation and shipped a fix. The "Reviewer PASS" wasn't load-bearing against a real-user "this isn't playable".
+
+**Reversible?** Yes — close-out is just a state declaration; further work resumes if signal arrives.
+
+---
+
 ## 2026-05-01 11:08 — Retracting "MVP shipped": real-user feedback shows the asymmetry doesn't work
 
 **Context:** External user feedback just landed. Direct quote: *"the game doesn't seem to work. The ship version runs slow enough that it's easy to pick the gaps without needing the beacon. This is assuming that you're trying to avoid the red parts? Doing that still results in a wreck though. Does the person acting as the beacon also need to avoid the same obstacles? If so, that doesn't make sense from the game's narrative. I think the concept needs some work."*
