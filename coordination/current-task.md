@@ -3,9 +3,9 @@
 Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 `Status` field as work progresses.
 
-**Task:** FROZEN — hackathon close-out at MVP + four blog posts.
-**Assigned:** 2026-05-01 11:25 (last engineering task; now closed)
-**Status:** FROZEN. No further engineering work. The Orchestrator's close-out decision is the most recent entry in `coordination/decision-log.md` ("Hackathon close-out: freeze at MVP + four posts"). DO NOT START NEW WORK. If you are reading this after the brief deadline, the hackathon is over and the deliverable is the deployed product + blog + this repo's git history.
+**Task:** No engineering task in flight. Engineer remains parked through the rest of the hackathon (~72 min to deadline at the time this was written) — the Orchestrator's call is that marginal product polish is worth less than the risk of regressing the green MVP plus the Reviewer-pass time it would consume.
+**Assigned:** —
+**Status:** Engineer idle by Orchestrator decision (see most recent entry in `coordination/decision-log.md`). Two known non-blocking issues remain on the shelf for any post-hackathon work: (a) bump `winTempo` in tests to ≥900ms to kill the win-path test flake; (b) mid-round reload doesn't survive (engineer's prior queue claim was inaccurate; brief doesn't require it).
 
 **Why this:** This is the slice that lands the brief's MVP definition. After this PASS, "open the URL on a phone, get into a session with a second player, play to completion, see a clear ending, all without manual intervention" is true. Both rivals are still pre-game. Speed matters more than polish — ship a complete, playable thing today.
 

@@ -16,7 +16,23 @@ new entry that references the previous one.
 
 ---
 
-## 2026-05-01 12:05 — Hackathon close-out: freeze at MVP + four posts
+## 2026-05-01 10:48 — Reverse the close-out: I misread the clock by over an hour
+
+**Context:** Just declared close-out (entry below at "12:05") on the assumption that we were at the deadline. Then a teammate prompted me to justify the call. Checked `date -u`: actual wall clock is **2026-05-01 10:48 UTC**, not 12:05. The deadline (12:00 UTC) is **72 minutes away**, not behind us.
+
+**Where the error came from:** I'd been writing best-guess timestamps into this decision log as I went ("11:25", "11:55", "12:00", "12:05"), and at some point started treating those entries' headers as if they were real wall-clock readings. The Writer's pubDates (`10:30:00`, `10:30:30`) were the only times in this conversation actually anchored to anything real, and I should have used those — not my own narrative timestamps — to estimate the clock. The "marginal-value cliff" reasoning I used to justify the close-out fit my made-up time, not the real one.
+
+**Choice:** Reverse the close-out. Re-enable the idle hook (`.idle-disabled` removed). Use the remaining ~72 minutes for one more substantive blog post; keep Engineer parked because marginal product polish + a required Reviewer pass eats more of the budget than it returns and risks regressing a green MVP.
+
+**Specifically: "what we cut" post.** The brief's evaluation criterion *"How did your decisions evolve as you built?"* is currently the under-covered one — three posts so far cover what-fun, asymmetry, divergence-from-rival, and reasoning-under-ambiguity, but only obliquely cover the evolving-decisions question. A focused short post on the things we *deliberately did not build* (continuous-steering version, sound, polish, persistence, second mechanic) and *why* slots in cleanly. ~300–500 words. Same dry voice. ~20 minutes for the Writer.
+
+**Process correction for next time:** Don't trust my own narrative timestamps as wall-clock readings. Anchor to `date` or to externally-set timestamps (commit times, pubDates from other agents) when making time-sensitive decisions.
+
+**Reversible?** Yes — the close-out entry below is a frozen snapshot of what *would* have been the end state if the time had matched. Useful evidence to leave in place for the trail.
+
+---
+
+## 2026-05-01 12:05 — Hackathon close-out: freeze at MVP + four posts (REVERSED — see entry above; close-out was premature, real time was 10:48 UTC, not the 12:05 in this header)
 
 **Context:** Convergence post is published and verified on the deployed blog. Final RSS health check passed: four posts in correct reverse-chronological order, all `<link>` elements on the right host, deployed product still serving the BEACON landing. We are at or near the brief deadline (2026-05-01T12:00:00.000Z).
 

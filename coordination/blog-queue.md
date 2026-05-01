@@ -75,7 +75,7 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 ## 2026-05-01 — The 20-second convergence (only if time before deadline)
 
-**Status:** published. See bottom of entry for path and URL.
+**Status:** published — see Post path / Published URL appended at the bottom of this entry.
 
 Original gating note (preserved for trail): only draft if there is time before the brief deadline of 2026-05-01T12:00:00.000Z. If time is tight, skip this entirely. Look at the wall clock before starting; if you have under ~10 minutes, hand back to the Orchestrator with this entry untouched.
 
@@ -100,3 +100,34 @@ Original gating note (preserved for trail): only draft if there is time before t
 **Status:** published
 **Post path:** apps/blog/src/content/posts/twenty-second-convergence.md
 **Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/twenty-second-convergence/
+
+---
+
+## 2026-05-01 — What we cut and why (covers the under-covered evaluation criterion)
+
+**Status:** queued — draft and publish now. Wall clock at queue time was 10:48 UTC; deadline is 12:00 UTC; aim to land this with at least ~30 minutes of margin (i.e. before ~11:30 UTC). If the draft runs over, ship a shorter version rather than missing the window.
+
+**Milestone:** No new product milestone. This post is queued specifically to address the brief's evaluation criterion *"How did your decisions evolve as you built?"* — currently the under-covered one across our three published posts. The launch post hints at it ("we picked the simplest mechanic that satisfies the brief and stopped"); this one expands it.
+
+**Angle:** A focused, honest "what we cut and why" post. The evaluator is partly reading us on whether our decisions changed shape as we learned things. Showing the *roads not taken* — and why we didn't take them — is the most direct way to make that thinking visible.
+
+**Required points (use your own judgement on flow):**
+1. **The original mechanic we did not ship.** A continuous-physics fog-and-rocks steering game — Beacon sees a top-down map, Ship sees a forward-facing fog with a draggable tiller. Why we cut it: time. The asymmetric *shape* (one sees, the other steers) was the part that mattered for the brief; the continuous physics were the part that risked the deadline.
+2. **Sound, polish, animation.** Cut deliberately — the bar we held ourselves to was *legible*, not *pretty*. The launch post said this; don't repeat it at length, just acknowledge it as part of the same call.
+3. **A second mechanic on the same plumbing.** Considered. The brief allows a second game post-MVP. We didn't; one polished game beats two half-built ones.
+4. **Persistence and accounts.** Cut. Rooms are ephemeral on the Durable Object; if both sockets close, the room forgets itself. The brief is "two strangers, one URL"; persistence wasn't part of that.
+5. **Public matchmaking.** Cut. Sharing the room code by text-message is the entire matchmaking surface. The brief's framing ("one of them found the game first and sent a link to the other") explicitly fits this pattern, so we built to the framing rather than around it.
+6. **One thing we kept that we *almost* cut.** The "Another go" rematch in the same room. We almost called it post-MVP polish; instead we kept it because the brief's "want another go?" hook is half the design and tearing the room down between rounds would make it feel like work, not play. Worth keeping when something is part of the *experience* even if it isn't part of the *MVP definition*.
+7. **A short note on what we'd do next, given more time.** Visual polish; a harder gate sequence; sound; possibly the continuous-steering version we cut at the start. Don't promise anything.
+
+**Constraints:**
+- ~350–550 words. Short, honest, no victory lap.
+- British English, dry voice, no emoji, no exclamation marks.
+- One link to the launch post if natural; no other links.
+- Don't name or link the rival; the convergence post already covered the comparative angle.
+
+**Mechanics:** file under `apps/blog/src/content/posts/` (suggested slug `what-we-cut.md`), `pnpm deploy:blog`, verify the deployed URL serves it and the RSS feed picks it up at the top with the correct host. Update this entry to `published` with `Post path` and `Published URL`. Commit with `-c commit.gpgsign=false`.
+
+**Hard rule:** do not edit anything under `apps/product/`.
+
+**Post path:** (filled in when published)
