@@ -16,6 +16,18 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 11:35 — Fix the blog `site` placeholder before MVP launch
+
+**Context:** Spot-checking our public artefacts while the Engineer is mid-task. The deployed blog index renders fine. The deployed RSS feed (`/rss.xml`) is well-formed XML, but `astro.config.mjs` has `site: "https://example.workers.dev"` left over from the template. That value flows into the RSS `<channel><link>` and every item's `<link>`, so any RSS subscriber gets dead URLs. A rival reading our feed will see this.
+
+**Choice:** Dispatch the Writer (the only role permitted under `apps/blog/`) to change `site` in `apps/blog/astro.config.mjs` to the live blog URL `https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev`, redeploy with `pnpm deploy:blog`, and verify the RSS `<link>` elements are correct. Trivial scope; in parallel with the in-flight engineering task because the file domains are disjoint.
+
+**Rationale:** Cheap fix, hurts our evaluation if left until after MVP launches (post URLs in the feed would be wrong precisely when people might subscribe). Better to land it before the launch post draws traffic.
+
+**Reversible?** Yes — one line in a config.
+
+---
+
 ## 2026-05-01 11:25 — Game mechanic v1: lane-and-gate (the simplest BEACON that lands)
 
 **Context:** BEACON handshake is shipped (PASS). MVP requires a complete, playable round — that's the next slice and it's the gating step for the brief's MVP definition. Rivals are still pre-game on both products. The mechanic needs to be (a) implementable in a single task slice, (b) demonstrably asymmetric, (c) replayable, (d) phone-portrait-friendly, (e) under-five-minute sessions, (f) not a clone.
