@@ -32,4 +32,4 @@ All three specs in `apps/product/tests/room.spec.ts` should pass:
 - `joining a non-existent room shows a clear message`
 - `joining a full room shows a clear message`
 
-**Reviewer verdict:** pending
+**Reviewer verdict:** PASS — All three specs in `apps/product/tests/room.spec.ts` pass against the deployed URL (3/3 in 3.0s). Independent probe at iPhone SE 375×667 confirms portrait viability (no horizontal overflow on landing or room, 53px tap targets), unambiguous code alphabet (sample `M5MNH`, no 0/O/1/I/L), presence flips both ways within ~2.5s on a fresh create→join, and clear error copy on both paths: unknown code shows "That room code doesn't exist. Ask Player A to share their code again." and a third joiner gets "Room is full — only two players per room." (17/17 reviewer checks passed).
