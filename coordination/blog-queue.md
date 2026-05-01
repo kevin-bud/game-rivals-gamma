@@ -133,3 +133,40 @@ Original gating note (preserved for trail): only draft if there is time before t
 **Status:** published
 **Post path:** apps/blog/src/content/posts/what-we-cut.md
 **Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/what-we-cut/
+
+---
+
+## 2026-05-01 — "We got the asymmetry wrong" (HOLD until the asymmetry-fix Reviewer PASSes)
+
+**Status:** queued (HOLD — the Engineer is currently in flight on the asymmetry fix; the Reviewer has not yet verified. Do NOT draft until the fix has a PASS verdict in `coordination/review-queue.md`. Orchestrator will lift the HOLD by editing this entry.)
+
+**Milestone (will be true once HOLD is lifted):** Reviewer-verified PASS on the BEACON asymmetry fix. The Ship can no longer see which lane is open; the Beacon's UI is differentiated from the Ship's; the latency margin is widened so a "looks in time" tap is in time. The brief's "asymmetric end-to-end" requirement is now actually satisfied.
+
+**Angle:** A real user told us the game didn't work — that the Ship could solo, that the Beacon's role wasn't visible in the UI, that even apparent dodges led to wrecks. We had previously declared MVP shipped on the strength of Playwright specs that verified the *flow* (transitions, hit-counter increments, end-screen appears) but not the *gameplay* (does the asymmetry actually force cooperation, are the rules legible without a tutorial). This post owns that gap, says what we changed, and reflects on the process error.
+
+**This is the "decision-trail" post the brief explicitly evaluates on.** The brief's criterion *"How did your decisions evolve as you built?"* is now best-evidenced by this exact moment: a real user spoke, we listened, we retracted a claim, we fixed it. Lean into the honesty; don't soften it.
+
+**Required points (use your own judgement on flow):**
+
+1. **What the user said.** Quote them — paraphrase if you want a cleaner reading flow, but include the substance: Ship could solo, Beacon's role wasn't visible, dodges still wrecked, the concept needed work. Don't name the user; "a player" or "someone playing the deployed build" is fine.
+
+2. **What we'd missed.** Our verification leaned on Playwright assertions that the *round-view* appears, that hits increment, that countdown lands on zero. None of those check whether the game is *playable* in the sense that matters to the brief — *do the asymmetric roles actually force the asymmetric behaviour*. They don't. Spec-passing is not the same as playable.
+
+3. **The three concrete fixes.** Honestly enumerate them — open lane hidden from the Ship, Beacon UI re-shaped to look like a console rather than a steering view, server-side latency grace on lane evaluations. Engineer's queue claim has the precise details; mirror them.
+
+4. **The deeper lesson.** A spec that asserts "the round-view appears" passes whether the game is brilliant or unplayable. Mechanical specs verify the *infrastructure of play*; only a person playing the game can verify the *play*. We'll bake "play it as a real user" into our review process going forward.
+
+5. **A short closing note** that the deployed game now actually works the way we said it did, and an invitation to try it. One link to the deployed URL is fine.
+
+**Constraints:**
+- ~450–650 words. Honest, plainly-spoken, no spin, no excuses.
+- British English, dry voice. No emoji. No exclamation marks.
+- Don't blame anyone. Don't blame the user. Don't blame the agents. *We* shipped the broken version; *we* fixed it.
+- Don't gloat about the fix. The post is about the process gap, not the cleverness of the fix.
+- One link to the deployed product URL. One link to the previous launch post (`/posts/beacon-launch/`) if natural. No other links.
+
+**Mechanics:** file under `apps/blog/src/content/posts/` (suggested slug `we-got-the-asymmetry-wrong.md`), `pnpm deploy:blog`, verify the deployed URL serves it and the RSS feed picks it up at the top with the correct host. Update this entry to `published` with `Post path` and `Published URL`. Commit with `-c commit.gpgsign=false`.
+
+**Hard rule:** do not edit anything under `apps/product/`.
+
+**Post path:** (filled in when published)
