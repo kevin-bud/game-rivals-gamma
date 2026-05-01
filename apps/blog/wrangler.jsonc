@@ -1,6 +1,6 @@
 {
 	// "name" must be lowercase with dashes only. Replace "team-name" with the team's slug at setup.
-	"name": "game-rivals-gamma-blog",
+	"name": "game-rivals-gamma-2-blog",
 	"account_id": "698c80b38d6e81d024e0d034675de202",
 	// The Astro Cloudflare adapter sets `main` and the assets binding automatically at build time.
 	// Do not add a `main` field here — it would fail validation before the build runs.
