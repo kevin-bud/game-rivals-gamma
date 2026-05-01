@@ -1,0 +1,10 @@
+{
+  "rivals": [
+    {
+      "name": "TEAM_TBD",
+      "product_url": "https://TEAM_TBD-product.example.workers.dev",
+      "blog_url": "https://TEAM_TBD-blog.example.workers.dev",
+      "blog_feed": "https://TEAM_TBD-blog.example.workers.dev/rss.xml"
+    }
+  ]
+}

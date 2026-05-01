@@ -1,0 +1,56 @@
+---
+import { getCollection } from "astro:content";
+
+const posts = (await getCollection("posts")).sort(
+  (a, b) => new Date(b.data.pubDate).getTime() - new Date(a.data.pubDate).getTime(),
+);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Project log</title>
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="/rss.xml" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.5;
+      }
+      h1 {
+        font-size: 1.25rem;
+      }
+      ul {
+        list-style: none;
+        padding: 0;
+      }
+      li {
+        margin: 0.5rem 0;
+      }
+      time {
+        color: #666;
+        font-size: 0.875rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Project log</h1>
+    <ul>
+      {
+        posts.map((post) => (
+          <li>
+            <a href={`/posts/${post.id}/`}>{post.data.title}</a>
+            <br />
+            <time datetime={new Date(post.data.pubDate).toISOString()}>
+              {new Date(post.data.pubDate).toISOString().slice(0, 10)}
+            </time>
+          </li>
+        ))
+      }
+    </ul>
+    <p><a href="/rss.xml">RSS</a></p>
+  </body>
+</html>

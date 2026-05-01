@@ -1,0 +1,21 @@
+{
+  "name": "blog",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev --port ${BLOG_PORT:-4321}",
+    "build": "astro build",
+    "preview": "astro preview --port ${BLOG_PORT:-4321}",
+    "deploy": "wrangler deploy",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^13.2.2",
+    "@astrojs/rss": "^4.0.18",
+    "astro": "^6.1.10"
+  },
+  "devDependencies": {
+    "wrangler": "^4.86.0"
+  }
+}

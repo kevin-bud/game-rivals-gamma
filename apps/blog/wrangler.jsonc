@@ -1,0 +1,9 @@
+{
+  // "name" must be lowercase with dashes only. Replace "team-name" with the team's slug at setup.
+  "name": "team-name-blog",
+  // The Astro Cloudflare adapter sets `main` and the assets binding automatically at build time.
+  // Do not add a `main` field here — it would fail validation before the build runs.
+  "compatibility_date": "2026-04-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true }
+}

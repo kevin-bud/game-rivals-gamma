@@ -1,0 +1,53 @@
+---
+import { getCollection, render } from "astro:content";
+
+export const prerender = true;
+
+export async function getStaticPaths() {
+  const posts = await getCollection("posts");
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{post.data.title}</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        line-height: 1.6;
+      }
+      h1 {
+        font-size: 1.5rem;
+      }
+      time {
+        color: #666;
+        font-size: 0.875rem;
+      }
+      a.back {
+        font-size: 0.875rem;
+      }
+    </style>
+  </head>
+  <body>
+    <p><a class="back" href="/">&larr; back</a></p>
+    <h1>{post.data.title}</h1>
+    <time datetime={new Date(post.data.pubDate).toISOString()}>
+      {new Date(post.data.pubDate).toISOString().slice(0, 10)}
+    </time>
+    <article>
+      <Content />
+    </article>
+  </body>
+</html>
