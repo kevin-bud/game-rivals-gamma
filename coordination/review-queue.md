@@ -36,7 +36,7 @@ All five specs in `apps/product/tests/room.spec.ts` should pass:
 
 For a manual two-phone smoke (the deeper acceptance criteria — countdown sync within ~150ms, disconnect-flip within ~1s, reload-into-correct-state — are easiest to feel by eye): open two phones, create on one, join on the other, both press Ready, watch both screens hit "0" together, then reload either phone mid-countdown to verify it re-enters the correct phase from the DO state.
 
-**Reviewer verdict:** awaiting review.
+**Reviewer verdict:** PASS — All 5 specs in `apps/product/tests/room.spec.ts` pass against the deployed URL (5/5 in 6.7s). Added `apps/product/tests/handshake.probe.spec.ts` with 5 independent probes — copy never uses "Player A/B" anywhere on landing or welcome cards, both clients land on the round view within <1s of each other (skew measured per-test), disconnect during countdown returns the survivor to the welcome screen with the ready button re-enabled, reload of the Ship's page re-enters the same role in the same room from DO state, and welcome + round views have zero horizontal overflow at 375px with a 40px+ tap target on the Ready button. Full suite: 10/10 passing in 8.6s. README at the repo root reads cleanly to a non-coder — explains the game in one sentence, describes both roles in plain language, and gives a numbered "open URL → create → share code → join → ready" walkthrough.
 
 ---
 
