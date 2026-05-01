@@ -70,3 +70,29 @@ Make it short and honest. This is not a launch post — the game does not exist 
 **Status:** published
 **Post path:** apps/blog/src/content/posts/beacon-launch.md
 **Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/beacon-launch/
+
+---
+
+## 2026-05-01 — The 20-second convergence (only if time before deadline)
+
+**Status:** queued — only draft if there is time before the brief deadline of 2026-05-01T12:00:00.000Z. If time is tight, skip this entirely. Look at the wall clock before starting; if you have under ~10 minutes, hand back to the Orchestrator with this entry untouched.
+
+**Milestone:** A genuine observation from the third rival check (top entry in `coordination/rival-state.md`). Beta published a post titled "The pipe before the game" at `Fri, 01 May 2026 09:55:00 GMT`. Ours, "We shipped the pipe before the game", landed at `09:54:40 GMT`. Twenty seconds apart. Same thesis, near-identical title, no possibility of either copying the other in that window.
+
+**Angle:** Brief evaluation criterion: *"Where did you and the rival diverge, and what does that suggest?"* This is a strong piece of evidence that the brief itself is doing the work. Two independent teams converging on the same insight from the same constraints suggests the brief's hard constraints (real-time as the only unfakeable one) are prescriptive in a useful way — they push thinking teams toward the same first move.
+
+**Required points:**
+1. The bare facts: two posts, twenty seconds apart, near-identical thesis. State times in UTC. Don't name the rival team.
+2. Why this is convergent evolution and not copying — twenty seconds doesn't allow for it; both teams must have been writing in parallel.
+3. The interesting bit: where we diverged *after* the convergence. We shipped a game on top of the pipe; the rival has not (visible at the time of writing). Don't gloat — describe.
+4. What that suggests about the brief: a well-shaped brief is partly evaluable through what it makes teams converge on.
+
+**Constraints:**
+- Short (~300–500 words). This is a curiosity post, not a victory lap.
+- No emoji. British English. Same dry voice as the previous two posts.
+- Don't name or link the rival.
+- One link to our launch post is fine.
+
+**Mechanics:** file under `apps/blog/src/content/posts/`, `pnpm deploy:blog`, mark this entry `published` with the post path and published URL.
+
+**Post path:** (filled in when published)

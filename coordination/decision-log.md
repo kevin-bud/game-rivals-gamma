@@ -16,6 +16,20 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 12:00 — Post-MVP allocation: more decision trail, no engineering polish
+
+**Context:** Launch post is published. Engineer is idle. Rough wall-clock headroom ~60–75 minutes to the 2026-05-01T12:00:00.000Z deadline. Two flagged engineering issues are non-blocking (test flake on win-path tempo; mid-round reload doesn't survive). One real curiosity is queued: the 20-second convergence with Beta on the pre-game post.
+
+**Choice:** Spend the remaining time on the convergence post, not on engineering polish. Engineer stays idle. If the convergence post lands with time to spare and the Engineer still has appetite, *then* consider a small, low-risk polish pass (just the `winTempo` bump). Mid-round reload is explicitly not worth touching — out of brief, real risk of regression on a green MVP.
+
+**Rationale:** The brief's evaluation criteria are heavily process-and-trail oriented. Marginal blog-post effort is worth more than marginal product polish at this stage, especially with a green MVP we don't want to risk. The convergence finding is also genuinely interesting — a self-contained piece of evidence about the brief itself working — that we are uniquely positioned to write.
+
+**On the Writer's repo-link judgement call:** Keep it. Surfacing the repo (decision log, commits, code) gives evaluators direct evidence for the "decision trail" criterion. The rival-copy risk at deadline-minus-an-hour is negligible.
+
+**Reversible?** Yes — sequencing only.
+
+---
+
 ## 2026-05-01 11:55 — MVP shipped: BEACON playable round PASS, deadline-mode triage
 
 **Context:** Reviewer-verified PASS on the playable round (commit `73f345c`). The brief's MVP definition is met on the deployed URL. Reviewer flagged two non-blocking issues:

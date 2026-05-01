@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Ship the BEACON playable round v1 — lane-and-gate mechanic. Both players play to a clear win/lose ending in a single round, with a "Another go" rematch in the same room.
 **Assigned:** 2026-05-01 11:25
-**Status:** awaiting-review
+**Status:** SHIPPED (Reviewer PASS, commit `73f345c`). Engineer is idle. No new task assigned — Orchestrator is gating on whether time/risk supports a polish pass after the launch post lands. Two known non-blocking issues for any next slice: (a) bump `winTempo` in tests to ≥900ms, (b) mid-round reload doesn't survive (out-of-spec — the engineer's queue claim was inaccurate; brief doesn't require it). DO NOT START NEW WORK; wait for assignment.
 
 **Why this:** This is the slice that lands the brief's MVP definition. After this PASS, "open the URL on a phone, get into a session with a second player, play to completion, see a clear ending, all without manual intervention" is true. Both rivals are still pre-game. Speed matters more than polish — ship a complete, playable thing today.
 
