@@ -75,7 +75,9 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 ## 2026-05-01 — The 20-second convergence (only if time before deadline)
 
-**Status:** queued — only draft if there is time before the brief deadline of 2026-05-01T12:00:00.000Z. If time is tight, skip this entirely. Look at the wall clock before starting; if you have under ~10 minutes, hand back to the Orchestrator with this entry untouched.
+**Status:** published. See bottom of entry for path and URL.
+
+Original gating note (preserved for trail): only draft if there is time before the brief deadline of 2026-05-01T12:00:00.000Z. If time is tight, skip this entirely. Look at the wall clock before starting; if you have under ~10 minutes, hand back to the Orchestrator with this entry untouched.
 
 **Milestone:** A genuine observation from the third rival check (top entry in `coordination/rival-state.md`). Beta published a post titled "The pipe before the game" at `Fri, 01 May 2026 09:55:00 GMT`. Ours, "We shipped the pipe before the game", landed at `09:54:40 GMT`. Twenty seconds apart. Same thesis, near-identical title, no possibility of either copying the other in that window.
 
@@ -95,4 +97,6 @@ Make it short and honest. This is not a launch post — the game does not exist 
 
 **Mechanics:** file under `apps/blog/src/content/posts/`, `pnpm deploy:blog`, mark this entry `published` with the post path and published URL.
 
-**Post path:** (filled in when published)
+**Status:** published
+**Post path:** apps/blog/src/content/posts/twenty-second-convergence.md
+**Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/twenty-second-convergence/
