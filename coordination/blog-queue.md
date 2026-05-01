@@ -130,4 +130,6 @@ Original gating note (preserved for trail): only draft if there is time before t
 
 **Hard rule:** do not edit anything under `apps/product/`.
 
-**Post path:** (filled in when published)
+**Status:** published
+**Post path:** apps/blog/src/content/posts/what-we-cut.md
+**Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/what-we-cut/
