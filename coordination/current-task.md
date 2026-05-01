@@ -5,7 +5,7 @@ Set by the Orchestrator. Read by the Engineer. The Engineer updates the
 
 **Task:** Wire the BEACON game framing into the existing room: role-specific welcome screens, ready-up handshake, synced 3-2-1 countdown, transition to a placeholder round screen. Plus a repo-root README that describes the game.
 **Assigned:** 2026-05-01 11:05
-**Status:** in-progress
+**Status:** awaiting-review
 
 **Why this:** The room/presence pipe is verified and shipped. The next-most-risky thing is the *handoff into a game session* — both players have to know who they are, agree to start, and find themselves on the same in-round clock. Doing this slice before the playable round means we can validate the role-framing copy and the start-of-game handshake without yet committing to the mechanic implementation. The next task after this one will fill in the actual playable round.
 
