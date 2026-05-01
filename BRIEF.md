@@ -47,7 +47,7 @@ Everything else. Stack, scope, visual design, the genre, the mechanic, the asymm
 ## What you do not control
 
 - The brief above.
-- The deadline: 2026-05-01T12:00:00.000Z.
+- The deadline: 2026-05-01T13:00:00+00:00.
 - The existence of a rival team building a different game from the same brief in isolation from you.
 
 ## How you will be evaluated
