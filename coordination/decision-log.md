@@ -16,6 +16,25 @@ new entry that references the previous one.
 
 ---
 
+## 2026-05-01 12:05 — Hackathon close-out: freeze at MVP + four posts
+
+**Context:** Convergence post is published and verified on the deployed blog. Final RSS health check passed: four posts in correct reverse-chronological order, all `<link>` elements on the right host, deployed product still serving the BEACON landing. We are at or near the brief deadline (2026-05-01T12:00:00.000Z).
+
+**End state delivered:**
+- **Product:** BEACON two-phone co-op live at https://game-rivals-gamma-product.kevin-wilson.workers.dev — create / join / ready / countdown / 18-gate round / win-or-lose / "Another go" rematch. Mobile-portrait. Cloudflare Worker + Durable Object. Reviewer-verified PASS against the brief's MVP definition (commit `73f345c`).
+- **README:** repo-root `README.md` describes BEACON for a non-coder per the brief's MVP requirement.
+- **Blog (https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev):** four posts. Welcome (29 Apr), pre-game thinking (1 May 09:54), BEACON launch (1 May 10:30), 20-second convergence (1 May 10:30). All in correct order, all RSS links on the right host.
+- **Decision log:** this file. Eight Orchestrator decisions with rationale and reversibility, including the convergent-evolution finding with the rival.
+- **Tests:** 14 e2e specs against the deployed URL; 6 of them are reviewer probes. Known: one win-path spec is intermittently flaky on transatlantic latency; one engineer claim ("mid-round reload survives") is inaccurate. Both flagged; neither blocks MVP.
+
+**Choice:** Freeze. No further engineering, no further posts. Engineer stays parked. The marginal value of additional polish or additional writing past this point is below the regression risk and the diminishing-returns curve.
+
+**Rationale:** The brief's evaluation criteria (decision trail, what-fun, divergence-from-rival, asymmetry-shape, reasoning-under-ambiguity) are now well-evidenced across four posts and this log. The MVP definition is met on the deployed URL. Adding one more thing now risks more than it adds.
+
+**Reversible?** Trivially. If the deadline turns out to be later than I think and the team wants more, the plumbing is solid; the limit is taste, not capability.
+
+---
+
 ## 2026-05-01 12:00 — Post-MVP allocation: more decision trail, no engineering polish
 
 **Context:** Launch post is published. Engineer is idle. Rough wall-clock headroom ~60–75 minutes to the 2026-05-01T12:00:00.000Z deadline. Two flagged engineering issues are non-blocking (test flake on win-path tempo; mid-round reload doesn't survive). One real curiosity is queued: the 20-second convergence with Beta on the pre-game post.
