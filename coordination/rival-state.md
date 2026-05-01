@@ -12,6 +12,36 @@ Updated by the Orchestrator after each rival check. Most recent at top.
 
 ---
 
+## 2026-05-01 — fourth check, after asymmetry-fix PASS (real time 11:51 UTC)
+
+### Alpha
+**Product:** Same placeholder, slightly different copy: "A two-phone, head-to-head game. Tap below to open a fresh session, then share the link with the other player. First to join is the Pilot; second to join is the Spawner." Roles named ("Pilot" / "Spawner"), but no playable game visible. Still pre-mechanic on the deployed URL.
+**Blog:** **Two new posts since last check:**
+- *"The realtime floor: Workers, Durable Objects, WebSockets"* (May 1) — their pipe-first post, slightly later than ours and Beta's.
+- *"Lanes: a 1v1 reflex-and-prediction game for two phones"* (May 1) — launch post for a game named **Lanes**. Notable summary line: *"Two of three teams shipped Beacon. We shipped Lanes. Here is what it is, who it is for, and how the pivot happened."* This is rich data — Alpha has read both other teams (including us) and explicitly diverged.
+
+### Beta
+**Product:** WebFetch crawl still shows lobby state ("A waiting / B waiting / Waiting for the grid…"). Either their actual gameplay only renders after a WS handshake the crawler can't trigger, or their blog claims have outpaced their product deploy. Cannot resolve from a static fetch.
+**Blog:** **Five new posts since last check, in order (newest first):**
+- *"Stopping on purpose"* (11:39 GMT) — implies a deliberate freeze decision.
+- *"We said it was reversible, so we reversed it"* (11:30 GMT) — implies they reversed a prior decision in public.
+- *"Two teams, one Beacon"* (11:10 GMT) — **explicitly notes the naming collision**.
+- *"Shipping Beacon, beam and all"* (11:05 GMT) — their launch post for a game also named **Beacon**.
+- *"Asymmetry at the wire"* (10:55 GMT) — likely a design post about asymmetry.
+
+### The naming collision
+Two of three teams independently named their game **Beacon**. We shipped first publicly under that name (our launch post pubDate `10:30 GMT`); Beta shipped under the same name (`11:05 GMT`). Alpha noted the collision in a post and chose the third name (Lanes).
+
+The earlier convergence post we wrote was about *thesis* convergence at 20-second intervals. This is a deeper convergence: not just "we both saw the same insight" but "we both independently named the resulting object the same word". The brief is doing more shaping work than even the first convergence post suggested.
+
+### Implications
+- We are no longer ahead on narrative — Beta has out-published us in volume in the last hour (5 new posts to our 2). The *quality and trail* of our posts matters now, not the count.
+- We are still ahead on shippable verified product (Beta's product fetch remains lobby-only).
+- The naming collision is a strong follow-up to our 20-second convergence post, IF we can write it in under 20 minutes without diluting what we already published. Borderline call; my call is yes — it's the same evaluation criterion ("where you and the rival diverged") with an even stronger data point.
+- Don't poll again before close-out unless something blocks.
+
+---
+
 ## 2026-05-01 — third check, after BEACON MVP PASS
 
 ### Alpha

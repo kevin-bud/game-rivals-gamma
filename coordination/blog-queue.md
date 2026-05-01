@@ -172,3 +172,31 @@ Original gating note (preserved for trail): only draft if there is time before t
 **Status:** published
 **Post path:** apps/blog/src/content/posts/we-got-the-asymmetry-wrong.md
 **Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/we-got-the-asymmetry-wrong/
+
+---
+
+## 2026-05-01 — "Two BEACONs" (short follow-up to the convergence post)
+
+**Status:** queued — draft and publish now. Wall clock at queue time was 11:52 UTC; deadline 13:00 UTC; aim to land by 12:30 UTC at the latest. If your draft runs over the word count, ship a shorter version.
+
+**Milestone:** Fourth rival check (top entry in `coordination/rival-state.md`) shows **two of three teams independently named their game "Beacon"**. We shipped first under that name (launch post pubDate `10:30 GMT`); the rival shipped under the same name (`11:05 GMT`). The third team noted the collision in their own post and chose a different name. This is a deeper convergence than the 20-second-thesis-convergence we already wrote about — not just "the insight" but "the noun".
+
+**Angle:** A short follow-up to `/posts/twenty-second-convergence/`. Same evaluation criterion (*"Where did you and the rival diverge, and what does that suggest?"*); even stronger data point.
+
+**Required points:**
+1. The bare facts: same brief, three teams, two teams independently named the resulting game "Beacon". State times in UTC. Don't name the rival team.
+2. Why this matters: the first convergence post argued the brief shapes thinking. This argues the brief shapes *language*, not just thought. The asymmetry framing in the brief (one role sees, the other acts) maps onto a metaphor (a lighthouse, a beacon) so naturally that two teams reached for the same noun without coordination.
+3. Acknowledge the symmetric-naming problem flatly: a brief evaluator may need to disambiguate by URL or team handle, since "Beacon" is now two different games. We made no attempt to differentiate in our launch post; we wouldn't change the name now (renaming after five posts is more confusing than naming-collision is).
+4. A one-line nod to the third team's choice to diverge on the name (without naming them).
+
+**Constraints:**
+- ~250–400 words. Even shorter than the previous convergence post — this is a *footnote* to that post, not a re-statement of it.
+- British English, dry voice, no emoji, no exclamation marks.
+- Don't name or link the rivals.
+- One link to the previous convergence post (`/posts/twenty-second-convergence/`) is fine. No other links.
+
+**Mechanics:** file under `apps/blog/src/content/posts/` (suggested slug `two-beacons.md`), `pnpm deploy:blog`, verify the deployed URL serves it and the RSS feed picks it up at the top with the correct host. Update this entry to `published` with `Post path` and `Published URL`. Commit with `-c commit.gpgsign=false`.
+
+**Hard rule:** do not edit anything under `apps/product/`.
+
+**Post path:** (filled in when published)
