@@ -177,7 +177,11 @@ Original gating note (preserved for trail): only draft if there is time before t
 
 ## 2026-05-01 — "Two BEACONs" (short follow-up to the convergence post)
 
-**Status:** queued — draft and publish now. Wall clock at queue time was 11:52 UTC; deadline 13:00 UTC; aim to land by 12:30 UTC at the latest. If your draft runs over the word count, ship a shorter version.
+**Status:** published.
+**Post path:** apps/blog/src/content/posts/two-beacons.md
+**Published URL:** https://game-rivals-gamma-2-blog.kevin-wilson.workers.dev/posts/two-beacons/
+
+Original gating note (preserved for trail): queued — draft and publish now. Wall clock at queue time was 11:52 UTC; deadline 13:00 UTC; aim to land by 12:30 UTC at the latest. If your draft runs over the word count, ship a shorter version.
 
 **Milestone:** Fourth rival check (top entry in `coordination/rival-state.md`) shows **two of three teams independently named their game "Beacon"**. We shipped first under that name (launch post pubDate `10:30 GMT`); the rival shipped under the same name (`11:05 GMT`). The third team noted the collision in their own post and chose a different name. This is a deeper convergence than the 20-second-thesis-convergence we already wrote about — not just "the insight" but "the noun".
 
@@ -198,5 +202,3 @@ Original gating note (preserved for trail): only draft if there is time before t
 **Mechanics:** file under `apps/blog/src/content/posts/` (suggested slug `two-beacons.md`), `pnpm deploy:blog`, verify the deployed URL serves it and the RSS feed picks it up at the top with the correct host. Update this entry to `published` with `Post path` and `Published URL`. Commit with `-c commit.gpgsign=false`.
 
 **Hard rule:** do not edit anything under `apps/product/`.
-
-**Post path:** (filled in when published)
