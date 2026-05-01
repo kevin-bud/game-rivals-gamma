@@ -24,6 +24,13 @@ const DEFAULT_GATE_INTERVAL_MS = 1700;
 // orient on the first cue without an instant hit.
 const ROUND_LEAD_IN_MS = 2000;
 const HIT_LIMIT = 3;
+// How long after a gate's nominal arrivesAt we wait before evaluating
+// it. Acts as a server-side latency grace window so a Ship tap that
+// landed visually "in time" but actually arrived ~150-250ms after the
+// gate (the cost of a transatlantic round-trip) is still counted. See
+// evaluateDueGates for the full rationale and decision-log entry
+// 2026-05-01 11:08 retraction.
+const LANE_GRACE_MS = 200;
 
 // Test hook: WS URL accepts ?test_seed=<n> to force the gate seed and
 // ?test_tempo=<ms> to accelerate the gate interval. These exist purely to
@@ -1416,16 +1423,31 @@ export class Room implements DurableObject {
       return;
     }
     const next = this.gates[this.nextGateIndex];
-    this.state.storage.setAlarm(next.arrivesAt).catch(() => {
+    // Schedule the alarm at the END of the latency grace window, not at
+    // arrivesAt itself — otherwise the alarm fires, evaluateDueGates sees
+    // arrivesAt + LANE_GRACE_MS > now, no gate is consumed, and we
+    // schedule the alarm at the same arrivesAt again (infinite no-op
+    // loop). The grace window is the whole point of this fix.
+    this.state.storage.setAlarm(next.arrivesAt + LANE_GRACE_MS).catch(() => {
       // ignore
     });
   }
 
   private evaluateDueGates(now: number): void {
+    // Latency grace: accept lane changes that arrive up to LANE_GRACE_MS
+    // *after* the gate's nominal arrivesAt before we evaluate it. The
+    // Ship's tap travels client → CF edge → DO (worst-case ~150-250ms
+    // transatlantic), so a tap that visually looks "in time" can otherwise
+    // be evaluated against the Ship's previous lane. By delaying
+    // evaluation to arrivesAt + LANE_GRACE_MS we give the late-arriving
+    // lane message time to land. Trade-off: the gate visually "passes"
+    // before the verdict resolves, but the verdict is now more often
+    // correct, which matters more for a co-op game than a tight
+    // animation. See decision-log 2026-05-01 11:08 retraction.
     while (
       this.phase === "round" &&
       this.nextGateIndex < this.gates.length &&
-      this.gates[this.nextGateIndex].arrivesAt <= now + 50
+      this.gates[this.nextGateIndex].arrivesAt + LANE_GRACE_MS <= now
     ) {
       const gate = this.gates[this.nextGateIndex];
       this.nextGateIndex += 1;
