@@ -427,3 +427,170 @@ test("mid-round reload re-enters the round with the same hits and gates", async 
     await browser.close();
   }
 });
+
+// Asymmetry probe: the Ship's gate render must NOT reveal which lane is
+// open. The Beacon still renders the open lane visibly. This is the
+// load-bearing asymmetry — without it the Ship can solo and the Beacon
+// is decorative.
+test("Ship's gate view hides the open lane; Beacon's reveals it", async () => {
+  test.setTimeout(60_000);
+
+  const browser = await chromium.launch();
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+
+  try {
+    const pageA = await contextA.newPage();
+    const code = await createBeacon(
+      pageA,
+      `test_seed=${LOSE_SEED}&test_tempo=1200`,
+    );
+    const pageB = await contextB.newPage();
+    await joinShip(pageB, code, `test_seed=${LOSE_SEED}&test_tempo=1200`);
+
+    await expect(pageA.getByTestId("presence-text")).toHaveText(
+      /Waiting for the Ship to be ready/i,
+      { timeout: 10_000 },
+    );
+    await pageA.getByTestId("ready-button").click();
+    await pageB.getByTestId("ready-button").click();
+    await expect(pageA.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
+    await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
+
+    // Wait for the gates layer to actually render at least one gate on
+    // each side. Beacon renders all 18 gates immediately (the whole map
+    // is on screen); Ship renders the next two as they approach.
+    await expect(pageA.locator(".beacon-gate").first()).toBeVisible({ timeout: 5_000 });
+    await expect(pageB.locator(".ship-gate").first()).toBeVisible({ timeout: 10_000 });
+
+    // Beacon still sees the open-lane info: at least one cell with the
+    // .open class exists in the Beacon's gates layer.
+    const beaconOpenCount = await pageA.locator(".beacon-gate .lane-cell.open").count();
+    expect(beaconOpenCount).toBeGreaterThan(0);
+
+    // Ship sees an undifferentiated obstacle bar: no .open lane cell
+    // should exist anywhere in the Ship's gates layer.
+    const shipOpenCount = await pageB.locator(".ship-gate .lane-cell.open").count();
+    expect(shipOpenCount).toBe(0);
+
+    // Sanity check: the Ship is rendering gates (we just removed the
+    // open-lane marker, not the gates themselves).
+    const shipGateCount = await pageB.locator(".ship-gate").count();
+    expect(shipGateCount).toBeGreaterThan(0);
+
+    // Defence-in-depth: the Ship's gate elements should also not leak
+    // the open lane through their dataset (a curious player should not
+    // be able to read the answer out of the DOM).
+    const shipGateDatasetLanes = await pageB.evaluate(() => {
+      const els = Array.from(document.querySelectorAll(".ship-gate")) as HTMLElement[];
+      return els.map((el) => el.dataset.gateLane ?? null);
+    });
+    for (const lane of shipGateDatasetLanes) {
+      expect(lane).toBeNull();
+    }
+  } finally {
+    await contextA.close();
+    await contextB.close();
+    await browser.close();
+  }
+});
+
+// Latency margin probe: a Ship tap that lands within the server-side
+// grace window AFTER the gate's nominal arrivesAt should still count as
+// a successful dodge (no hit registered). This is the fix for "I tapped
+// in time but still wrecked" — without the grace window, transatlantic
+// WS round-trip eats the budget. We use the in-page __beaconState hook
+// to time the tap precisely against arrivesAt, then assert hits stays
+// at zero across the first few gates.
+test("late-but-within-grace lane tap still counts as a successful dodge", async () => {
+  test.setTimeout(60_000);
+
+  const browser = await chromium.launch();
+  const contextA = await browser.newContext();
+  const contextB = await browser.newContext();
+
+  try {
+    const pageA = await contextA.newPage();
+    const code = await createBeacon(
+      pageA,
+      `test_seed=${LOSE_SEED}&test_tempo=1200`,
+    );
+    const pageB = await contextB.newPage();
+    await joinShip(pageB, code, `test_seed=${LOSE_SEED}&test_tempo=1200`);
+
+    await expect(pageA.getByTestId("presence-text")).toHaveText(
+      /Waiting for the Ship to be ready/i,
+      { timeout: 10_000 },
+    );
+    await pageA.getByTestId("ready-button").click();
+    await pageB.getByTestId("ready-button").click();
+    await expect(pageB.getByTestId("round-view")).toBeVisible({ timeout: 10_000 });
+
+    // In-page steering: tap each gate's correct lane between 0 and 80ms
+    // AFTER its nominal arrivesAt — i.e. comfortably late by old
+    // standards but well within the 200ms server-side grace window. The
+    // test passes if hits remains zero through the first six gates.
+    await pageB.evaluate(() => {
+      const win = window as unknown as {
+        __beaconState: {
+          phase?: string;
+          gates?: { lane: string; arrivesAt: number }[];
+          shipLane?: string;
+        } | null;
+        sendInput: (lane: string) => void;
+      };
+      let gateIndex = 0;
+      let tappedForIndex = -1;
+      setInterval(() => {
+        const state = win.__beaconState;
+        if (!state || state.phase !== "round" || !state.gates) {
+          return;
+        }
+        const now = Date.now();
+        const target = state.gates[gateIndex];
+        if (!target) {
+          return;
+        }
+        // Tap once when we are 0-80ms PAST the gate's arrivesAt. This
+        // simulates the worst-case "I clicked it just as the gate hit
+        // me" UX — under the old 50ms-early evaluation we'd already have
+        // been judged. Under the 200ms grace window the lane update has
+        // time to land before the alarm evaluates.
+        const elapsed = now - target.arrivesAt;
+        if (
+          tappedForIndex !== gateIndex &&
+          elapsed >= 0 &&
+          elapsed <= 80 &&
+          target.lane !== state.shipLane
+        ) {
+          tappedForIndex = gateIndex;
+          win.sendInput(target.lane);
+        }
+        // Advance once we are well past the grace window so the next
+        // iteration targets the next gate.
+        if (elapsed > 250) {
+          gateIndex += 1;
+          tappedForIndex = -1;
+        }
+      }, 20);
+    });
+
+    // After ~6 gates' worth of round time (6 × 1200ms = 7.2s plus grace),
+    // the Ship should still have zero hits if the grace window is doing
+    // its job. We allow at most one stray hit to keep the test resilient
+    // to outlier RTTs but the median expectation is zero.
+    await pageB.waitForTimeout(8_500);
+    const hits = await pageB.evaluate(() => {
+      const win = window as unknown as {
+        __beaconState: { hits?: number } | null;
+      };
+      return win.__beaconState?.hits ?? -1;
+    });
+    expect(hits).toBeGreaterThanOrEqual(0);
+    expect(hits).toBeLessThanOrEqual(1);
+  } finally {
+    await contextA.close();
+    await contextB.close();
+    await browser.close();
+  }
+});

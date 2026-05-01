@@ -917,10 +917,10 @@ const roomPage = (code: string, role: "A" | "B"): string => `<!doctype html>
         for (const lane of lanes) {
           const cell = document.createElement("div");
           // Critical asymmetry: Beacon sees the open lane (transparent cell);
-          // Ship sees an undifferentiated obstacle bar (no `.open` class on
-          // any cell). Without the Beacon's cue, the Ship cannot tell which
-          // lane is safe — that's the load-bearing asymmetry the brief asks
-          // for. See decision-log entry "Retracting MVP shipped" 2026-05-01.
+          // Ship sees an undifferentiated obstacle bar (no .open class on
+          // any cell). Without the Beacon cue, the Ship cannot tell which
+          // lane is safe — that is the load-bearing asymmetry the brief
+          // asks for. See decision-log "Retracting MVP shipped" 2026-05-01.
           if (ship) {
             cell.className = "lane-cell";
           } else {
