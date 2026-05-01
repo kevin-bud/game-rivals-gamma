@@ -1,121 +1,98 @@
-# Hackathon template
+# BEACON
 
-Symmetric template for the AI Rivals hackathon. Both rival teams clone
-from the same tag and start with identical code. The only thing that
-differs per team is `rivals/rivals.json`, populated at kickoff with
-the *other* team's URLs.
+A co-operative game for two phones. One of you sees the sea. The other
+sails through fog. You only get home together.
 
-This README is for hackathon organisers and judges. The agents read
-[`CLAUDE.md`](./CLAUDE.md) instead.
+Play it now: <https://game-rivals-gamma-product.kevin-wilson.workers.dev>
 
-## What's in here
+## What it is
 
-- `apps/blog/` — Astro 6 blog deployed to Cloudflare Workers, with
-  RSS feed at `/rss.xml` and one neutral welcome post.
-- `apps/product/` — minimal "coming soon" Worker with a Playwright
-  smoke test. The Engineer agent replaces `src/index.ts` with the
-  actual product during the hackathon.
-- `coordination/` — Markdown coordination files the four roles use to
-  collaborate.
-- `rivals/rivals.json` — placeholder for rival team URLs. Replaced
-  per team at kickoff.
-- `.claude/agents/` — role definitions for Orchestrator, Engineer,
-  Reviewer, Writer.
-- `.claude/commands/` — slash commands for the orchestrator workflow.
-- `.claude/hooks/` — `Stop` hook that re-prompts idle agents.
+BEACON is a real-time, asymmetric, two-player game designed for one
+short round of about a minute. You both join the same room from your
+own phones — no app, no account, no chat — and play complementary
+roles toward a single shared goal: bring the ship safely to harbour.
 
-## Per-team setup
+It's built for a quick, low-stakes round between two people in the same
+room or on opposite sides of the planet. The mechanic itself does the
+talking: there is no chat, because the roles force you to communicate.
 
-For each team's clone:
+## How to play
 
-1. Replace the placeholder `team-name` in both `wrangler.jsonc`
-   files (`apps/blog/wrangler.jsonc` and `apps/product/wrangler.jsonc`)
-   with the team's slug. Worker names must be lowercase with dashes
-   only.
-2. Populate `rivals/rivals.json` with the *other* team's
-   `product_url`, `blog_url`, and `blog_feed`.
-3. Drop the actual brief into `BRIEF.md`, replacing the placeholder.
-4. Configure the team's Cloudflare credentials so `wrangler deploy`
-   works (`CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`).
+You and a friend each open the URL on your own phone, one of you taps
+**Create session**, shares the five-character room code, and the other
+taps **Join session** with that code. As soon as you're both in, you
+each see your role and tap **I'm ready**. A short three-two-one
+countdown syncs both screens, and the round begins.
 
-That's the whole per-team configuration. Everything else is symmetric.
+### If you are the Beacon
 
-## Local development
+You see the sea. You can see the rocks, the fog, and the harbour the
+ship needs to reach. The Ship can see almost nothing. Your job is to
+flash signals — left, ahead, right, hold — at the right moments so the
+Ship steers around the rocks and into harbour. You do not control the
+ship; you only light the way.
+
+### If you are the Ship
+
+You sail forward through fog. You can't see the rocks, you can't see
+the harbour, you can only see what's directly in front of your bow.
+The Beacon can see the whole sea. Watch their signals carefully and
+trust them — they know what you can't. Your tiller is your only
+control.
+
+You both win or you both don't. Rounds last around a minute, and you
+can play another straight after.
+
+## Starting a session
+
+1. Open <https://game-rivals-gamma-product.kevin-wilson.workers.dev>
+   on your phone.
+2. Tap **Create session**. You'll get a five-letter code.
+3. Send the code to your friend (text it, say it out loud, hold up the
+   screen — anything goes).
+4. They open the same URL, type the code into **Join session**, and
+   tap join.
+5. You'll both see your role. Tap **I'm ready** when you are. As soon
+   as both of you are ready, the round starts.
+
+If your partner drops out, the room resets to the welcome screen and
+waits for them to come back. Reloading the page is safe — the room
+remembers where you both are.
+
+## What's in this repo
+
+This repository is the working code for the team building BEACON. The
+human-facing project is the deployed game above; the rest is process.
+
+- `apps/product/` — the game itself, a Cloudflare Worker with a Durable
+  Object per room. Real-time over WebSockets. No client framework —
+  hand-written HTML, CSS, and a small amount of vanilla JavaScript.
+- `apps/blog/` — the team's design diary, written as the build
+  unfolds. Astro 6, deployed to Cloudflare Workers.
+- `coordination/` — the agent team's working notes (decision log,
+  current task, review queue, blog queue). Useful as a record of how
+  the design evolved, not as documentation of the game itself.
+- `BRIEF.md` — the original constraints we were handed.
+
+## Running it locally
 
 Requires Node 22 and pnpm.
 
 ```sh
 pnpm install
-pnpm dev          # runs blog + product dev servers in parallel
-```
-
-Individual apps:
-
-```sh
-pnpm --filter blog dev
 pnpm --filter product dev
 ```
 
-The blog is at <http://localhost:4323> in dev. The product is at
-<http://localhost:8789>.
+The dev server runs at <http://localhost:8789> by default. Open it on
+two browser tabs (or two phones on the same network) to play locally.
 
-### Running two teams on the same machine
-
-Both apps' dev ports are configurable via env vars:
-
-| Variable                  | Default | Notes                              |
-| ------------------------- | ------- | ---------------------------------- |
-| `BLOG_PORT`               | `4323`  | Astro dev server                   |
-| `PRODUCT_PORT`            | `8789`  | `wrangler dev` HTTP port           |
-| `PRODUCT_INSPECTOR_PORT`  | `9232`  | `wrangler dev` Node inspector port |
-
-Default values work for one team. If a second team runs `pnpm dev` on
-the same machine concurrently, override every port — e.g.:
+To run the end-to-end tests against the deployed URL:
 
 ```sh
-BLOG_PORT=4421 PRODUCT_PORT=8887 PRODUCT_INSPECTOR_PORT=9330 pnpm dev
+PRODUCT_URL=https://game-rivals-gamma-product.kevin-wilson.workers.dev pnpm --filter product test:e2e
 ```
 
-A `.env.example` is provided. Copy it to `.env.local` and source it
-before `pnpm dev`:
+## Credits
 
-```sh
-cp .env.example .env.local
-# edit .env.local with this team's port values
-set -a; source .env.local; set +a
-pnpm dev
-```
-
-`PRODUCT_PORT` is also picked up by Playwright as the default base URL
-for `pnpm --filter product test:e2e`.
-
-## Deploy
-
-```sh
-pnpm deploy            # deploys both apps
-pnpm deploy:blog       # blog only
-pnpm deploy:product    # product only
-```
-
-## Tests
-
-```sh
-pnpm --filter product test:e2e
-```
-
-Playwright runs against `PRODUCT_URL` if set, otherwise
-`http://localhost:8789`.
-
-## Where the agents take over
-
-After per-team setup is complete and the brief is in `BRIEF.md`, the
-agent team takes over via [`CLAUDE.md`](./CLAUDE.md). The first
-slash command they run is `/kickoff`. From that point the four
-agents coordinate through the files in `coordination/` until the
-hackathon ends.
-
-## Ground rules
-
-The template is symmetric. Anything fixed in this template after the
-`v0.1.0-template` tag must be applied to both teams' clones identically
-and logged in the hackathon record.
+Built during the AI Rivals hackathon. Cloudflare Workers, Durable
+Objects, and a lot of WebSocket prodding.
